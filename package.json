@@ -1,0 +1,66 @@
+{
+  "name": "orca-axi",
+  "version": "0.1.0",
+  "description": "AXI CLI that resolves and reports the Orca terminal/session runtime binary",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adibirzu/orca-axi.git"
+  },
+  "keywords": [
+    "orca",
+    "terminal",
+    "cli",
+    "agent",
+    "axi",
+    "toon",
+    "doctor"
+  ],
+  "bin": {
+    "orca-axi": "./dist/bin/orca-axi.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "types": "./dist/src/index.d.ts",
+  "files": [
+    "dist",
+    "skills/orca-axi",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:skill": "tsx scripts/build-skill.ts",
+    "dev": "tsx bin/orca-axi.ts",
+    "lint": "eslint bin src test scripts",
+    "test": "npm run build && vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@toon-format/toon": "^2.1.0",
+    "axi-sdk-js": "^0.1.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.0.0",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.0"
+  }
+}
