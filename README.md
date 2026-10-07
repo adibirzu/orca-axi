@@ -28,8 +28,18 @@ orca-axi fleet --json
 orca-axi doctor           # binary diagnosis
 orca-axi doctor --full    # every candidate path tried
 orca-axi doctor --json
+orca-axi mirror --from snapshot.json        # read-only Firstmate fleet cards
+orca-axi mirror --from snapshot.json --json # machine-readable cards
 orca-axi update --check   # current vs latest, no install
 ```
+
+`mirror` projects Firstmate fleet state (the `fm-fleet-snapshot.sh --json`
+document: task states, in-flight work, PR links) into Orca UI cards carrying
+their Orca project/host/environment placement as a render hint. It is a
+projection, not a control plane: cards are `readOnly` with no controls,
+nothing here mutates Firstmate state, and nothing here invokes an Orca
+mutating command. Whether a card actually paints inside the real Orca app is
+verified separately on the Mac where the desktop UI runs.
 
 `ORCA_CLI_COMMAND` overrides the binary search when set. `doctor` is a
 diagnostic, not a gate: it exits 0 in every case, so branch on the

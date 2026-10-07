@@ -1,6 +1,7 @@
 import { DESCRIPTION, TOP_HELP } from "./cli.js";
 import { DOCTOR_HELP } from "./commands/doctor.js";
 import { FLEET_HELP } from "./commands/fleet.js";
+import { MIRROR_HELP } from "./commands/mirror.js";
 import { VERSION } from "./version.js";
 
 /**
@@ -22,7 +23,8 @@ description: >
 
 ${DESCRIPTION} Version ${VERSION}.
 
-Status: **OB-3 scaffold.** \`fleet\` (the no-arg dashboard) and \`doctor\`
+Status: **OB-4 mirror.** \`fleet\` (the no-arg dashboard), \`doctor\`,
+and \`mirror\` (read-only Firstmate fleet projection into Orca UI cards)
 are live. \`update\`/\`update --check\` are built in via axi-sdk-js.
 
 Run it without a global install:
@@ -50,6 +52,7 @@ npx -y orca-axi fleet --json
 npx -y orca-axi doctor                # binary diagnosis
 npx -y orca-axi doctor --full          # every candidate path tried
 npx -y orca-axi doctor --json
+npx -y orca-axi mirror --from snapshot.json   # read-only fleet cards
 npx -y orca-axi update --check        # current vs latest, no install
 \`\`\`
 
@@ -67,6 +70,12 @@ ${FLEET_HELP}\`\`\`
 
 \`\`\`
 ${DOCTOR_HELP}\`\`\`
+
+\`mirror\` contract (read-only projection, not a control plane; Orca-runtime
+rendering is verified separately on the Mac where the desktop UI runs):
+
+\`\`\`
+${MIRROR_HELP}\`\`\`
 
 ## Exit codes
 

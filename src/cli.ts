@@ -2,14 +2,15 @@ import { runAxiCli } from "axi-sdk-js";
 
 import { doctorCommand, DOCTOR_HELP } from "./commands/doctor.js";
 import { fleetCommand, FLEET_HELP } from "./commands/fleet.js";
+import { mirrorCommand, MIRROR_HELP } from "./commands/mirror.js";
 import { VERSION } from "./version.js";
 
 export const DESCRIPTION =
   "Resolve and report the Orca terminal/session runtime binary.";
 
-export const TOP_HELP = `usage: orca-axi [fleet|doctor] [flags]
-commands[2]:
-  (none)=fleet, doctor
+export const TOP_HELP = `usage: orca-axi [fleet|doctor|mirror] [flags]
+commands[3]:
+  (none)=fleet, doctor, mirror
 output:
   Default TOON shows the smallest schema that lets the agent decide next.
   --full adds every candidate path, broken symlink, and session signal.
@@ -20,6 +21,8 @@ notes:
   runtime (1.x, this tool's subject) and the GNOME screen reader on
   Linux desktops. orca-axi probes candidates with --version only and
   refuses (structured report, exit 0) rather than mis-invoke the reader.
+  mirror projects Firstmate fleet state into read-only Orca UI cards;
+  it never mutates Firstmate or Orca state (see orca-axi mirror --help).
 flags[3]:
   --json, --full, --help, -v/--version
 examples:
@@ -27,6 +30,7 @@ examples:
   orca-axi fleet --json
   orca-axi doctor
   orca-axi doctor --full
+  orca-axi mirror --from snapshot.json
   orca-axi update --check
 `;
 
@@ -47,6 +51,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     commands: {
       fleet: (args) => fleetCommand(args),
       doctor: (args) => doctorCommand(args),
+      mirror: (args) => mirrorCommand(args),
     },
     // Bare `orca-axi` is the fleet dashboard (see normalizeArgv); wiring
     // home keeps the SDK contract for the empty-argv path too.
@@ -54,6 +59,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     getCommandHelp: (command) => {
       if (command === "fleet") return FLEET_HELP;
       if (command === "doctor") return DOCTOR_HELP;
+      if (command === "mirror") return MIRROR_HELP;
       return undefined;
     },
   });
@@ -74,7 +80,7 @@ export function normalizeArgv(raw: string[]): string[] {
     return raw;
   }
   const first = raw[0] ?? "";
-  if (first === "fleet" || first === "doctor" || first === "update") {
+  if (first === "fleet" || first === "doctor" || first === "mirror" || first === "update") {
     return raw;
   }
   if (first.startsWith("-")) {

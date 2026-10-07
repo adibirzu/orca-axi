@@ -4,6 +4,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - Build/test: `npm test` (build + vitest), `npm run lint`, `npm run build:skill` (regenerate `skills/orca-axi/SKILL.md`; `test/skill.test.ts` fails when stale).
 - Sharp edge: `orca` is also the GNOME screen reader on Linux desktops. Never invoke a resolved binary for anything beyond the `--version` identity probe in `src/orca-resolve.ts`; the guard refusals there are load-bearing. See `README.md` for the doctrine.
+- `mirror` (`src/mirror.ts` pure projection + `src/commands/mirror.ts` source loading) is read-only by design: source is `fm-fleet-snapshot.sh --json` or `--from <file>`, cards carry `readOnly` with empty `controls`, and no Orca mutating command is ever invoked. Orca-UI rendering verifies only on the Mac.
 
 
 - Add durable project-specific notes here as they are discovered through real work.

@@ -11,7 +11,8 @@ description: >
 
 Resolve and report the Orca terminal/session runtime binary. Version 0.1.0.
 
-Status: **OB-3 scaffold.** `fleet` (the no-arg dashboard) and `doctor`
+Status: **OB-4 mirror.** `fleet` (the no-arg dashboard), `doctor`,
+and `mirror` (read-only Firstmate fleet projection into Orca UI cards)
 are live. `update`/`update --check` are built in via axi-sdk-js.
 
 Run it without a global install:
@@ -39,15 +40,16 @@ npx -y orca-axi fleet --json
 npx -y orca-axi doctor                # binary diagnosis
 npx -y orca-axi doctor --full          # every candidate path tried
 npx -y orca-axi doctor --json
+npx -y orca-axi mirror --from snapshot.json   # read-only fleet cards
 npx -y orca-axi update --check        # current vs latest, no install
 ```
 
 Top-level surface:
 
 ```
-usage: orca-axi [fleet|doctor] [flags]
-commands[2]:
-  (none)=fleet, doctor
+usage: orca-axi [fleet|doctor|mirror] [flags]
+commands[3]:
+  (none)=fleet, doctor, mirror
 output:
   Default TOON shows the smallest schema that lets the agent decide next.
   --full adds every candidate path, broken symlink, and session signal.
@@ -58,6 +60,8 @@ notes:
   runtime (1.x, this tool's subject) and the GNOME screen reader on
   Linux desktops. orca-axi probes candidates with --version only and
   refuses (structured report, exit 0) rather than mis-invoke the reader.
+  mirror projects Firstmate fleet state into read-only Orca UI cards;
+  it never mutates Firstmate or Orca state (see orca-axi mirror --help).
 flags[3]:
   --json, --full, --help, -v/--version
 examples:
@@ -65,6 +69,7 @@ examples:
   orca-axi fleet --json
   orca-axi doctor
   orca-axi doctor --full
+  orca-axi mirror --from snapshot.json
   orca-axi update --check
 ```
 
@@ -115,6 +120,35 @@ examples:
   orca-axi doctor
   orca-axi doctor --full
   orca-axi doctor --json
+```
+
+`mirror` contract (read-only projection, not a control plane; Orca-runtime
+rendering is verified separately on the Mac where the desktop UI runs):
+
+```
+usage: orca-axi mirror [--from <path>] [--json] [--full]
+description:
+  Project Firstmate fleet state (task states, in-flight work, PR links)
+  into Orca UI cards as a read-only view. Source is the documented
+  Firstmate snapshot interface, never Firstmate tracked code: --from
+  reads a captured fm-fleet-snapshot.sh --json file, otherwise the
+  snapshot CLI ($FM_FLEET_SNAPSHOT_BIN or fm-fleet-snapshot.sh on PATH)
+  is run with the read-only --json flag. Each card carries its Orca
+  placement (project/host/environment per orca-ide --help) as a render
+  hint. This is a projection, not a control plane: cards are readOnly
+  with no controls, nothing here mutates Firstmate state, and nothing
+  here invokes an Orca mutating command. Orca-runtime rendering is
+  verified separately on the Mac where the desktop UI runs.
+outputs:
+  TOON view: source, summary{total,inFlight,queued,done}, cards[]
+  --full  adds per-card detail{kind,since,links,blockedBy,holds}
+  --json  the same view as JSON (cards also pass the Orca sink shape)
+flags[4]:
+  --from,   --json,   --full, --help
+examples:
+  orca-axi mirror --from snapshot.json
+  orca-axi mirror --from snapshot.json --json
+  orca-axi mirror --from snapshot.json --full
 ```
 
 ## Exit codes
