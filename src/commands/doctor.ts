@@ -93,7 +93,7 @@ export async function doctorCommand(args: string[], deps: DoctorDeps = {}): Prom
   }
 
   if (json) {
-    return JSON.stringify(report, null, 2);
+    return JSON.stringify({ doctor: report }, null, 2);
   }
   const help =
     resolution.status === "ok"

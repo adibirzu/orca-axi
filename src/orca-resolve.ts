@@ -207,8 +207,7 @@ export function resolveOrca(deps: ResolveDeps = {}): OrcaResolution {
   // 1. Explicit override always wins the search; it never wins the guard.
   const override = env[ORCA_CLI_COMMAND_ENV]?.trim();
   if (override) {
-    const executable = override.split(/\s+/, 1)[0] ?? override;
-    const probe = probeVersion(executable);
+    const probe = probeVersion(override);
     const version = probe.ok ? firstLine(probe.output) : undefined;
     const identity = probe.ok ? classifyIdentity(probe.output) : "unknown";
     if (identity === "screen-reader") {
@@ -220,7 +219,7 @@ export function resolveOrca(deps: ResolveDeps = {}): OrcaResolution {
         sessionSignals: [...sessionSignals, ...hintSignals],
         sessionActive,
         reason:
-          `${ORCA_CLI_COMMAND_ENV} points at the GNOME screen reader (${version ?? executable}), ` +
+          `${ORCA_CLI_COMMAND_ENV} points at the GNOME screen reader (${version ?? override}), ` +
           `not the Orca terminal/session runtime. Refusing to mis-invoke it.`,
         suggestions: [
           `Point ${ORCA_CLI_COMMAND_ENV} at the Orca 1.x runtime binary instead`,
@@ -236,17 +235,17 @@ export function resolveOrca(deps: ResolveDeps = {}): OrcaResolution {
         missingCandidates,
         sessionSignals: [...sessionSignals, ...hintSignals],
         sessionActive,
-        reason: `${ORCA_CLI_COMMAND_ENV} points at ${executable}, which failed its --version probe.`,
+        reason: `${ORCA_CLI_COMMAND_ENV} points at ${override}, which failed its --version probe.`,
         suggestions: [
-          `Check that ${executable} exists and is executable`,
+          `Check that ${override} exists and is executable`,
           "Unset the override to fall back to automatic resolution",
         ],
       };
     }
     const binary: ResolvedBinary = {
-      path: executable,
+      path: override,
       source: "env:ORCA_CLI_COMMAND",
-      bundle: executable.includes(".app/Contents/"),
+      bundle: override.includes(".app/Contents/"),
       identity,
       ...(version ? { version } : {}),
     };
