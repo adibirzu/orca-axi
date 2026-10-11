@@ -19,13 +19,6 @@
   "bin": {
     "orca-axi": "./dist/bin/orca-axi.js"
   },
-  "exports": {
-    ".": {
-      "types": "./dist/src/index.d.ts",
-      "default": "./dist/src/index.js"
-    }
-  },
-  "types": "./dist/src/index.d.ts",
   "files": [
     "dist",
     "skills/orca-axi",

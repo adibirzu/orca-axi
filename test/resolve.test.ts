@@ -186,14 +186,6 @@ describe("ORCA_CLI_COMMAND override", () => {
 });
 
 describe("Linux screen-reader guard", () => {
-  function linuxScreenReader(): ResolveDeps {
-    return base({
-      platform: "linux",
-      probeVersion: versions({ "/usr/bin/orca": "46.1" }),
-      searchPath: () => "/usr/bin/orca",
-    });
-  }
-
   it("refuses the GNOME screen reader found on PATH", () => {
     const probeVersion = vi.fn(versions({ "/usr/bin/orca": "46.1" }));
     const resolution = resolveOrca(
@@ -243,7 +235,6 @@ describe("Linux screen-reader guard", () => {
   });
 
   it("does not mistake the runtime for the reader on macOS", () => {
-    expect(linuxScreenReader().platform).toBe("linux");
     const mac = resolveOrca(
       base({
         probePath: files({ [SHIM]: "file" }),
