@@ -98,7 +98,7 @@ description:
   each candidate with --version only, identifies the 1.x runtime versus
   the unrelated GNOME screen reader that shares the orca name, and
   refuses (structured report, exit 0) rather than mis-invoke it.
-  ORCA_CLI_COMMAND overrides the search. Doctor is a diagnostic,
+  ORCA_CLI_COMMAND (one path, spaces allowed) overrides the search. Doctor is a diagnostic,
   not a gate: it exits 0 in every case; branch on status, not the exit code.
 checks[4]{name}:
   shim=~/.local/bin/orca resolves (dangling symlinks reported, not fatal)
@@ -108,7 +108,7 @@ checks[4]{name}:
 outputs:
   TOON report: status, binary{path,source,version,identity}, reason?
   --full  adds candidates tried, broken symlinks, and session signals
-  --json  the same report as JSON
+  --json  the same report as JSON, wrapped as {doctor: ...}
 flags[3]:
   --json,   --full, --help
 examples:

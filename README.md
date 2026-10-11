@@ -31,7 +31,8 @@ orca-axi doctor --json
 orca-axi update --check   # current vs latest, no install
 ```
 
-`ORCA_CLI_COMMAND` overrides the binary search when set. `doctor` is a
+`ORCA_CLI_COMMAND` overrides the binary search when set; its value is one
+path to the binary (spaces allowed), not a command line. `doctor` is a
 diagnostic, not a gate: it exits 0 in every case, so branch on the
 reported `status` (`ok` | `refused` | `error`), not the exit code.
 
