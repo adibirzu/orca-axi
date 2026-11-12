@@ -1,0 +1,717 @@
+{
+  "schemaVersion": "paperclip-orgs.v1",
+  "updatedAt": "2026-11-12T08:56:00+02:00",
+  "controlPlane": {
+    "primaryApiBase": "https://adi5.tailb55406.ts.net:9448",
+    "standbyApiBase": "https://adihost4.tailb55406.ts.net:9448",
+    "boardEnvPath": "/Users/adrianb/.paperclip/cyb-board.env",
+    "instanceMapPath": "/Users/adrianb/.config/orca-axi/paperclip-instance.json",
+    "linearTeam": {
+      "key": "CYB",
+      "name": "Cyber-sec",
+      "uuid": "ec623c8a-e8fb-4dac-aedb-92bec885d364"
+    }
+  },
+  "globalGovernance": {
+    "executionTarget": "adi0-firstmate",
+    "allowedExecutionHosts": [
+      "adi0",
+      "adi0-firstmate"
+    ],
+    "forbiddenExecutionHosts": [
+      "adi4",
+      "adihost4",
+      "adi5",
+      "adrians-macbook-pro"
+    ],
+    "vpsLocalCodeExec": false,
+    "mcpGovernance": {
+      "githubMergePr": false,
+      "secretsRawExport": false
+    },
+    "custodyFences": {
+      "reviewforgeHost": "adrians-macbook-pro",
+      "linearTeamFence": "OCD",
+      "fencedIssues": [
+        "OCD-498",
+        "OCD-500",
+        "OCD-501",
+        "OCD-502",
+        "OCD-503",
+        "OCD-504",
+        "OCD-528"
+      ],
+      "adi0CompanionIssues": [
+        "OCD-497",
+        "OCD-553"
+      ],
+      "fencedBranchPrefixes": [
+        "wip/adrians-macbook-pro/"
+      ]
+    }
+  },
+  "organizations": [
+    {
+      "slug": "cyb-01-fleet-harness",
+      "name": "01 — Fleet, Harness² & Developer Platform",
+      "initiativeId": "I-3",
+      "initiativeUuid": "b21a7072-abf2-4859-93ff-074de781e481",
+      "initiativeUrl": "https://linear.app/cyber-sec/initiative/01-fleet-harness-and-developer-platform-7c8ec9f2a690",
+      "budgetMonthlyCents": 25000,
+      "controlAgents": [
+        {
+          "name": "Dot-Ops",
+          "host": "adi4",
+          "adapter": "hermes_gateway",
+          "codingAllowed": false
+        }
+      ],
+      "governance": {
+        "executionTarget": "adi0-firstmate",
+        "vpsLocalCodeExec": false,
+        "allowedHarnesses": [
+          "claude",
+          "codex",
+          "agy",
+          "opencode",
+          "gemini",
+          "grok"
+        ],
+        "blockedHarnesses": [
+          "cursor"
+        ],
+        "mcpGovernance": {
+          "githubMergePr": false,
+          "secretsRawExport": false
+        },
+        "custodyFences": {
+          "reviewforgeHost": "adrians-macbook-pro",
+          "linearTeamFence": "OCD"
+        }
+      },
+      "projects": [
+        {
+          "id": "P-CYB-72",
+          "slug": "firstmate",
+          "name": "FirstMate",
+          "linearUuid": "0660fe2f-23d4-43bf-9e2e-700ba8a57b99",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/firstmate",
+          "repos": [
+            "adibirzu/firstmate"
+          ]
+        },
+        {
+          "id": "P-CYB-73",
+          "slug": "orca-axi",
+          "name": "Orca & AXI Plugins",
+          "linearUuid": "8ff1e728-4d61-42e4-9471-33bedb5d5cc9",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/orca-axi",
+          "repos": [
+            "adibirzu/orca-axi",
+            "adibirzu/orca-fleet-radar",
+            "adibirzu/llm-router-axi",
+            "adibirzu/usage-axi",
+            "adibirzu/quota-axi",
+            "adibirzu/harvest-axi",
+            "adibirzu/gha-runner-axi",
+            "adibirzu/lifeos-extensions-axi"
+          ]
+        },
+        {
+          "id": "P-CYB-7",
+          "slug": "harness-library",
+          "name": "Harness Library",
+          "linearUuid": "b2c09318-8982-400d-8855-09dd68b77431",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/harness-library",
+          "repos": [
+            "adibirzu/harness-library",
+            "adibirzu/no-mistakes",
+            "adibirzu/portable-agent-workflow",
+            "adibirzu/adibirzu-plugins",
+            "adibirzu/DevVisualization"
+          ]
+        },
+        {
+          "id": "P-CYB-4",
+          "slug": "uzi",
+          "name": "uzi",
+          "linearUuid": "38fa8c48-0cb9-493c-9b94-e55cd7577b91",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/uzi",
+          "repos": [
+            "adibirzu/uzi"
+          ]
+        },
+        {
+          "id": "P-CYB-10",
+          "slug": "hermes-lifeos",
+          "name": "Hermes adi4 - Dot / Optimus",
+          "linearUuid": "d066438b-3218-48c8-8754-09f2bc5f404e",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/hermes-lifeos",
+          "repos": [
+            "adibirzu/hermes-lifeos",
+            "adibirzu/hermes-security-monitor",
+            "adibirzu/openclaw-security-monitor",
+            "adibirzu/pai-planning",
+            "adibirzu/pai-private",
+            "adibirzu/cyberdesk",
+            "adibirzu/cyber-sec-web",
+            "adibirzu/mosaichr",
+            "adibirzu/homerun"
+          ]
+        },
+        {
+          "id": "P-OCD-70",
+          "slug": "reviewforge",
+          "name": "ReviewForge — Automatic GitHub Code Review",
+          "linearUuid": "reviewforge-automatic-github-code-review-4bed8226ecec",
+          "linearTeam": "OCD",
+          "primaryRepo": "adibirzu/reviewforge",
+          "repos": [
+            "adibirzu/reviewforge",
+            "Pentforge-io/reviewforge",
+            "adibirzu/craft-anything"
+          ],
+          "custodyHost": "adrians-macbook-pro"
+        }
+      ],
+      "code": "CYB01",
+      "companyId": "61edf87d-20eb-4b14-b83f-a244bc6953cf",
+      "issuePrefix": "FLE",
+      "firstmateAgentId": "193a6cbc-4592-4338-b91c-24d60456cc5c",
+      "portfolioDomain": "01-fleet-and-harness"
+    },
+    {
+      "slug": "cyb-02-pentforge-sec",
+      "name": "02 — Pentforge & Cybersecurity Products",
+      "initiativeId": "I-4",
+      "initiativeUuid": "565c6f35-bdd6-4232-81ab-294aa4f89665",
+      "initiativeUrl": "https://linear.app/cyber-sec/initiative/02-pentforge-and-cybersecurity-products-066dda067939",
+      "budgetMonthlyCents": 25000,
+      "controlAgents": [
+        {
+          "name": "Roel-SecOps",
+          "host": "adi5",
+          "adapter": "hermes_gateway",
+          "codingAllowed": false
+        }
+      ],
+      "governance": {
+        "executionTarget": "adi0-firstmate",
+        "vpsLocalCodeExec": false,
+        "allowedHarnesses": [
+          "claude",
+          "codex",
+          "opencode",
+          "grok",
+          "agy"
+        ],
+        "blockedHarnesses": [
+          "cursor"
+        ],
+        "mcpGovernance": {
+          "githubMergePr": false,
+          "secretsRawExport": false
+        },
+        "custodyFences": {
+          "reviewforgeHost": "adrians-macbook-pro",
+          "linearTeamFence": "OCD"
+        }
+      },
+      "projects": [
+        {
+          "id": "P-CYB-71",
+          "slug": "pentforge-documentum",
+          "name": "Pentforge Documentum",
+          "linearUuid": "6f840a23-fb45-4e89-b95e-73bc4e4def4c",
+          "linearTeam": "CYB",
+          "primaryRepo": "Pentforge-io/documentum",
+          "repos": [
+            "Pentforge-io/documentum",
+            "adibirzu/tendiro.ai"
+          ]
+        },
+        {
+          "id": "P-CYB-74",
+          "slug": "cyber-bot.ro",
+          "name": "Cyber-bot.ro",
+          "linearUuid": "433d5e3a-a342-4c22-9923-bd8a41736704",
+          "linearTeam": "CYB",
+          "primaryRepo": "Pentforge-io/cyber-bot.ro",
+          "repos": [
+            "Pentforge-io/cyber-bot.ro",
+            "adibirzu/cyber-bot.ro"
+          ]
+        },
+        {
+          "id": "P-CYB-75",
+          "slug": "pentforge.app",
+          "name": "Pentforge App",
+          "linearUuid": "5c283c9c-d028-4a83-aec0-27a08e3c9136",
+          "linearTeam": "CYB",
+          "primaryRepo": "Pentforge-io/pentforge.app",
+          "repos": [
+            "Pentforge-io/pentforge.app",
+            "Pentforge-io/pentforge-agent",
+            "Pentforge-io/pentforge-compliance-watch",
+            "Pentforge-io/hitme"
+          ]
+        },
+        {
+          "id": "P-CYB-76",
+          "slug": "pentforge.com",
+          "name": "Pentforge Web",
+          "linearUuid": "5fedae78-40e3-44c5-b5a5-977de7a047ef",
+          "linearTeam": "CYB",
+          "primaryRepo": "Pentforge-io/pentforge.com",
+          "repos": [
+            "Pentforge-io/pentforge.com",
+            "Pentforge-io/pentforge.io",
+            "adibirzu/Pentforgecom_updates",
+            "adibirzu/Pentfoege"
+          ]
+        },
+        {
+          "id": "P-CYB-77",
+          "slug": "forja",
+          "name": "Pentforge Forja",
+          "linearUuid": "3fbca7f8-e8af-4a90-a284-d77b10c632b4",
+          "linearTeam": "CYB",
+          "primaryRepo": "Pentforge-io/forja",
+          "repos": [
+            "Pentforge-io/forja"
+          ]
+        },
+        {
+          "id": "P-CYB-78",
+          "slug": "norcode-aisecurity",
+          "name": "Norcode AI Security",
+          "linearUuid": "9e1ed7b3-cbd7-423e-99b2-a1e64b48d7ed",
+          "linearTeam": "CYB",
+          "primaryRepo": "Pentforge-io/norcode-aisecurity",
+          "repos": [
+            "Pentforge-io/norcode-aisecurity"
+          ]
+        },
+        {
+          "id": "P-CYB-3",
+          "slug": "cyberbot",
+          "name": "Cyberbot",
+          "linearUuid": "6c6bc065-a264-4b8e-bc7b-7fb5347e9a9d",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/cyberbot",
+          "repos": [
+            "adibirzu/cyberbot",
+            "Pentforge-io/nexus-agent"
+          ]
+        }
+      ],
+      "code": "CYB02",
+      "companyId": "cb397506-50bd-4b34-8cd6-f37729286496",
+      "issuePrefix": "PEN",
+      "firstmateAgentId": "87c107d2-dcf0-4ff9-a5f6-27ed5b8de419",
+      "portfolioDomain": "02-pentforge-and-security"
+    },
+    {
+      "slug": "cyb-03-erp-finance",
+      "name": "03 — Enterprise ERP, Logistics & Finance",
+      "initiativeId": "I-5",
+      "initiativeUuid": "101c2ea9-53b8-43a5-b8b4-d8857c2120ae",
+      "initiativeUrl": "https://linear.app/cyber-sec/initiative/03-enterprise-erp-logistics-and-finance-09123d8fd13a",
+      "budgetMonthlyCents": 20000,
+      "controlAgents": [
+        {
+          "name": "Dot-Ops",
+          "host": "adi4",
+          "adapter": "hermes_gateway",
+          "codingAllowed": false
+        }
+      ],
+      "governance": {
+        "executionTarget": "adi0-firstmate",
+        "vpsLocalCodeExec": false,
+        "allowedHarnesses": [
+          "claude",
+          "codex",
+          "gemini",
+          "opencode",
+          "agy"
+        ],
+        "blockedHarnesses": [
+          "cursor"
+        ],
+        "mcpGovernance": {
+          "githubMergePr": false,
+          "secretsRawExport": false
+        },
+        "custodyFences": {
+          "reviewforgeHost": "adrians-macbook-pro",
+          "linearTeamFence": "OCD"
+        }
+      },
+      "projects": [
+        {
+          "id": "P-CYB-5",
+          "slug": "transport-management",
+          "name": "Transport Management",
+          "linearUuid": "731d3d04-c32b-4b36-a425-60a169e374e2",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/transport-management",
+          "repos": [
+            "adibirzu/transport-management",
+            "adibirzu/rkm-transport-bot",
+            "adibirzu/rkm-trans",
+            "adibirzu/roel-trans-web",
+            "adibirzu/rkm-intel"
+          ]
+        },
+        {
+          "id": "P-CYB-17",
+          "slug": "accountingapp",
+          "name": "RAI Accounting SaaS",
+          "linearUuid": "dc020f75-796a-444a-aff2-b4fa66f16505",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/accountingapp",
+          "repos": [
+            "adibirzu/accountingapp"
+          ]
+        },
+        {
+          "id": "P-CYB-1",
+          "slug": "smart-dispatch",
+          "name": "Smart Dispatch",
+          "linearUuid": "dc91fb1f-f401-4cfa-9902-f8168156fc52",
+          "linearTeam": "CYB",
+          "primaryRepo": "furoyce/ehr-dispatch.smartdispatcher.io",
+          "repos": [
+            "furoyce/ehr-dispatch.smartdispatcher.io",
+            "adibirzu/us-dispatch-management"
+          ]
+        },
+        {
+          "id": "P-CYB-9",
+          "slug": "roel-hermes",
+          "name": "Roel Hermes adi5",
+          "linearUuid": "cbeabec4-16b4-4d7c-a7ce-c064fb743f94",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/roel-hermes",
+          "repos": [
+            "adibirzu/roel-hermes",
+            "adibirzu/recipe-parser-meal-planner",
+            "adibirzu/retetar"
+          ]
+        },
+        {
+          "id": "P-CYB-13",
+          "slug": "quo-freight-flow",
+          "name": "Quo Freight Flow",
+          "linearUuid": "d80fa084-bebb-449a-9bc4-cde1952c00e3",
+          "linearTeam": "CYB",
+          "primaryRepo": null,
+          "repos": []
+        }
+      ],
+      "code": "CYB03",
+      "companyId": "87f74dea-87ce-4a46-bc74-c5f97a7ca444",
+      "issuePrefix": "ENT",
+      "firstmateAgentId": "60efcade-0e06-4c4b-bd78-ca1bd7a35812",
+      "portfolioDomain": "03-erp-logistics-and-finance"
+    },
+    {
+      "slug": "cyb-04-ai-voice-apps",
+      "name": "04 — AI Voice, Knowledge & Apps",
+      "initiativeId": "I-6",
+      "initiativeUuid": "0600f254-667e-432c-aa94-418d627be7bb",
+      "initiativeUrl": "https://linear.app/cyber-sec/initiative/04-ai-voice-knowledge-and-apps-b5140fb1cb7f",
+      "budgetMonthlyCents": 20000,
+      "controlAgents": [
+        {
+          "name": "Dot-Ops",
+          "host": "adi4",
+          "adapter": "hermes_gateway",
+          "codingAllowed": false
+        }
+      ],
+      "governance": {
+        "executionTarget": "adi0-firstmate",
+        "vpsLocalCodeExec": false,
+        "allowedHarnesses": [
+          "claude",
+          "codex",
+          "opencode",
+          "gemini",
+          "agy"
+        ],
+        "blockedHarnesses": [
+          "cursor"
+        ],
+        "mcpGovernance": {
+          "githubMergePr": false,
+          "secretsRawExport": false
+        },
+        "custodyFences": {
+          "reviewforgeHost": "adrians-macbook-pro",
+          "linearTeamFence": "OCD"
+        }
+      },
+      "projects": [
+        {
+          "id": "P-CYB-18",
+          "slug": "atlas",
+          "name": "ATLAS",
+          "linearUuid": "a42c36ae-7e92-49db-92a9-c4aefbc9ca70",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/ATLAS",
+          "repos": [
+            "adibirzu/ATLAS"
+          ]
+        },
+        {
+          "id": "P-CYB-79",
+          "slug": "annabella",
+          "name": "Annabella",
+          "linearUuid": "6e9c4fa2-6ec0-4562-9e23-032d24ee5ffd",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/annabella",
+          "repos": [
+            "adibirzu/annabella"
+          ]
+        },
+        {
+          "id": "P-CYB-15",
+          "slug": "cyberbot-elevenlabs-voice-kb",
+          "name": "Cyberbot ElevenLabs Voice + KB",
+          "linearUuid": "2335f000-5583-43c1-b5a7-1431db5b7f63",
+          "linearTeam": "CYB",
+          "primaryRepo": null,
+          "repos": []
+        },
+        {
+          "id": "P-CYB-16",
+          "slug": "manuale-rag",
+          "name": "manuale-rag",
+          "linearUuid": "89836392-62cc-4688-9991-237348b235e3",
+          "linearTeam": "CYB",
+          "primaryRepo": null,
+          "repos": []
+        }
+      ],
+      "code": "CYB04",
+      "companyId": "fb0dc4e2-b3e9-4385-8465-27196af73b90",
+      "issuePrefix": "AIV",
+      "firstmateAgentId": "69ca15af-8a67-42fb-a97d-f5b43ac6f540",
+      "portfolioDomain": "04-ai-voice-and-apps"
+    },
+    {
+      "slug": "cyb-05-cloud-infra",
+      "name": "05 — Cloud, OCI & Infrastructure",
+      "initiativeId": "I-7",
+      "initiativeUuid": "2346b5e4-f3ff-4d71-b923-b5a2ad944cbb",
+      "initiativeUrl": "https://linear.app/cyber-sec/initiative/05-cloud-oci-and-infrastructure-7c80b77f332b",
+      "budgetMonthlyCents": 20000,
+      "controlAgents": [
+        {
+          "name": "Roel-SecOps",
+          "host": "adi5",
+          "adapter": "hermes_gateway",
+          "codingAllowed": false
+        }
+      ],
+      "governance": {
+        "executionTarget": "adi0-firstmate",
+        "vpsLocalCodeExec": false,
+        "allowedHarnesses": [
+          "grok",
+          "codex",
+          "claude"
+        ],
+        "blockedHarnesses": [
+          "agy",
+          "cursor"
+        ],
+        "mcpGovernance": {
+          "githubMergePr": false,
+          "secretsRawExport": false
+        },
+        "custodyFences": {
+          "reviewforgeHost": "adrians-macbook-pro",
+          "linearTeamFence": "OCD"
+        }
+      },
+      "projects": [
+        {
+          "id": "P-CYB-2",
+          "slug": "aetherops",
+          "name": "AetherOps",
+          "linearUuid": "3655151e-8fb1-44ae-891b-8561a0e13113",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/aetherops",
+          "repos": [
+            "adibirzu/aetherops",
+            "adibirzu/attack"
+          ],
+          "allowedHarnesses": [
+            "grok",
+            "codex",
+            "claude"
+          ],
+          "blockedHarnesses": [
+            "agy",
+            "cursor"
+          ]
+        },
+        {
+          "id": "P-CYB-6",
+          "slug": "oci-observability-starter-kit",
+          "name": "OCI Observability Starter Kit",
+          "linearUuid": "1e97713b-c09e-4960-ae9d-07421c1b848c",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/OCI-DEMO",
+          "repos": [
+            "adibirzu/OCI-DEMO",
+            "adibirzu/obs",
+            "adibirzu/oci-demo-control-plane",
+            "adibirzu/ObserveAI",
+            "adibirzu/oci-observability-tools",
+            "adibirzu/oci-sd-observability",
+            "adibirzu/octo-observability-demo",
+            "adibirzu/oci-guardian",
+            "adibirzu/oci-compliance-scanner",
+            "adibirzu/oci-compliance-scanner-public",
+            "adibirzu/oci-coordinator",
+            "adibirzu/oci-log-analytics-detections",
+            "adibirzu/oci-log-analytics-multicloud",
+            "adibirzu/logan-security-dashboard",
+            "adibirzu/oci-zpr-visibility",
+            "adibirzu/oci-skills",
+            "adibirzu/threat-hunting-oci",
+            "adibirzu/multicloud-compliance",
+            "adibirzu/OCI-Wazuh",
+            "adibirzu/oci-splunk",
+            "adibirzu/azurelogs2oci",
+            "adibirzu/gcplogs2oci"
+          ]
+        },
+        {
+          "id": "P-CYB-11",
+          "slug": "adi1-cleanup",
+          "name": "adi1 Cleanup",
+          "linearUuid": "f49390bc-a783-41b3-83b0-2333baad2fdc",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/dgx-spark-fleet-ops",
+          "repos": [
+            "adibirzu/dgx-spark-fleet-ops",
+            "adibirzu/dgx-spark-observability",
+            "adibirzu/sparkDash",
+            "adibirzu/sparkdash-control-plane"
+          ]
+        },
+        {
+          "id": "P-CYB-12",
+          "slug": "nas-humble-knowledge-library",
+          "name": "NAS + Humble Knowledge Library",
+          "linearUuid": "b3c004b1-b137-4e6e-9aa4-587d7a89b000",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/infrastructure-rebuild-kit",
+          "repos": [
+            "adibirzu/infrastructure-rebuild-kit"
+          ]
+        },
+        {
+          "id": "P-CYB-19",
+          "slug": "orafuse",
+          "name": "OraFuse",
+          "linearUuid": "e8a0b335-fb18-476e-83a3-822a5852b9eb",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/orafuse",
+          "repos": [
+            "adibirzu/orafuse"
+          ]
+        }
+      ],
+      "code": "CYB05",
+      "companyId": "4c0899cc-cee9-4b1d-850c-c4054a47b7d1",
+      "issuePrefix": "CLO",
+      "firstmateAgentId": "deae3ed9-753b-4029-9d3f-bd0500e95bd1",
+      "portfolioDomain": "05-cloud-and-infra"
+    },
+    {
+      "slug": "cyb-06-labs-research",
+      "name": "06 — Research, Labs & Incubation",
+      "initiativeId": "I-8",
+      "initiativeUuid": "b0438cf6-0c62-4cf4-9fb9-4235ae84ecfe",
+      "initiativeUrl": "https://linear.app/cyber-sec/initiative/06-research-labs-and-incubation-6aaa022a1813",
+      "budgetMonthlyCents": 10000,
+      "controlAgents": [
+        {
+          "name": "Dot-Ops",
+          "host": "adi4",
+          "adapter": "hermes_gateway",
+          "codingAllowed": false
+        },
+        {
+          "name": "Roel-SecOps",
+          "host": "adi5",
+          "adapter": "hermes_gateway",
+          "codingAllowed": false
+        }
+      ],
+      "governance": {
+        "executionTarget": "adi0-firstmate",
+        "vpsLocalCodeExec": false,
+        "allowedHarnesses": [
+          "claude",
+          "codex",
+          "opencode",
+          "gemini",
+          "agy"
+        ],
+        "blockedHarnesses": [
+          "cursor"
+        ],
+        "mcpGovernance": {
+          "githubMergePr": false,
+          "secretsRawExport": false
+        },
+        "custodyFences": {
+          "reviewforgeHost": "adrians-macbook-pro",
+          "linearTeamFence": "OCD"
+        }
+      },
+      "projects": [
+        {
+          "id": "P-CYB-8",
+          "slug": "oci-api-contract-framework",
+          "name": "OCI API Contract Framework",
+          "linearUuid": "adfeb00d-f40d-4499-8bbf-4b02bbcc6ffc",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/oci-api-contract-framework",
+          "repos": [
+            "adibirzu/oci-api-contract-framework"
+          ]
+        },
+        {
+          "id": "P-CYB-14",
+          "slug": "local-ocr-rag-adi1",
+          "name": "Local OCR + RAG adi1",
+          "linearUuid": "b1fff1e8-568c-4b72-9b36-468edeec8bb6",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/langfuse",
+          "repos": [
+            "adibirzu/langfuse",
+            "adibirzu/multillm"
+          ]
+        }
+      ],
+      "code": "CYB06",
+      "companyId": "e43d9845-d8fd-446b-8b23-0c199f86e23f",
+      "issuePrefix": "RES",
+      "firstmateAgentId": "d1ffc496-358f-4ed8-ae9c-d9126da26714",
+      "portfolioDomain": "06-labs-and-archive"
+    }
+  ]
+}
