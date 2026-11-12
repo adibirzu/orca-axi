@@ -276,6 +276,6 @@ describe("paperclip sources & local-state parsers", () => {
       config.controlPlane.linearTeam.uuid,
       { apiKey: "lin_test_key", fetchImpl: mockLinearFetch as unknown as typeof fetch },
     );
-    expect(mockLinearFetch).toHaveBeenCalledTimes(3);
+    expect(mockLinearFetch).toHaveBeenCalledTimes(4);
   });
 });

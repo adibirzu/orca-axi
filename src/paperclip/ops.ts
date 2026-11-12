@@ -9,6 +9,7 @@ import {
   loadCustodySnapshotLive,
   loadFirstMateTasks,
   loadInstanceMap,
+  runWithConcurrency,
   saveInstanceMapAtomic,
   updateLinearIssueStateLive,
 } from "./sources.js";
@@ -217,7 +218,13 @@ export async function runSyncOp(
     readonly initiative?: string | null;
     readonly limit?: number | null;
   },
-): Promise<SyncPlan & { readonly mode: string; readonly appliedCount: number }> {
+): Promise<
+  SyncPlan & {
+    readonly mode: string;
+    readonly appliedCount: number;
+    readonly orgs: ReadonlyArray<Record<string, unknown>>;
+  }
+> {
   const now = deps.now?.() ?? new Date().toISOString();
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
   const fmHome = deps.fmHome ?? process.env.FM_HOME ?? "/Users/adrianb/dev/firstmate";
@@ -225,16 +232,22 @@ export async function runSyncOp(
   const ledger = loadLedger({ ledgerPath: deps.ledgerPath, fmHome });
   const client = resolveDepsClient(deps, config);
 
-  const linearIssues = await (deps.fetchLinearIssues ?? fetchLinearIssuesLive)(config);
-  const allRepos = config.organizations.flatMap((o) => o.projects.flatMap((p) => p.repos));
-  const githubPrs = await (deps.fetchGitHubPrs ?? fetchGitHubPrsLive)(allRepos);
+  const [linearIssues, githubPrs, custody] = await Promise.all([
+    (deps.fetchLinearIssues ?? fetchLinearIssuesLive)(config),
+    (deps.fetchGitHubPrs ?? fetchGitHubPrsLive)(
+      config.organizations.flatMap((o) => o.projects.flatMap((p) => p.repos)),
+    ),
+    (deps.loadCustodySnapshot ?? loadCustodySnapshotLive)(config),
+  ]);
   const fmTasks = (deps.loadFirstMateTasks ?? loadFirstMateTasks)(fmHome);
-  const custody = await (deps.loadCustodySnapshot ?? loadCustodySnapshotLive)(config);
 
-  const paperclipIssuesByOrg: Record<string, readonly PaperclipIssue[]> = {};
-  for (const [orgSlug, entry] of Object.entries(instanceMap.organizations)) {
-    paperclipIssuesByOrg[orgSlug] = await client.listIssues(entry.companyId);
-  }
+  const orgEntries = Object.entries(instanceMap.organizations);
+  const orgIssuePairs = await runWithConcurrency(orgEntries, 6, async ([orgSlug, entry]) => [
+    orgSlug,
+    await client.listIssues(entry.companyId),
+  ] as const);
+  const paperclipIssuesByOrg: Record<string, readonly PaperclipIssue[]> =
+    Object.fromEntries(orgIssuePairs);
 
   const plan = reconcileFourWay({
     orgsConfig: config,
@@ -249,17 +262,24 @@ export async function runSyncOp(
     now,
   });
 
-  if (!options.apply) return { ...plan, mode: "dry-run", appliedCount: 0 };
+  const orgsSummary = config.organizations.map((o) => ({
+    slug: o.slug,
+    code: o.code ?? null,
+    companyId: instanceMap.organizations[o.slug]?.companyId ?? o.companyId ?? null,
+    initiativeId: o.initiativeId,
+    projectsCount: o.projects.length,
+    plannedMutations: plan.mutations.filter((m) => m.orgSlug === o.slug).length,
+  }));
 
-  let nextLedger = ledger;
-  let appliedCount = 0;
+  if (!options.apply) return { ...plan, orgs: orgsSummary, mode: "dry-run", appliedCount: 0 };
+
   const updateLinear = deps.updateLinearIssueState ?? updateLinearIssueStateLive;
-
-  for (const mut of plan.mutations) {
+  const outcomes = await runWithConcurrency(plan.mutations, 6, async (mut) => {
     if (mut.target === "linear") {
       await updateLinear(mut.linearIssueUuid, mut.targetStatus, config.controlPlane.linearTeam.uuid);
-      appliedCount += 1;
-    } else if (mut.action === "create" && mut.paperclipCompanyId && mut.title) {
+      return { applied: true, ledgerEntry: undefined };
+    }
+    if (mut.action === "create" && mut.paperclipCompanyId && mut.title) {
       const created = await client.createIssue(mut.paperclipCompanyId, {
         title: mut.title,
         description: mut.description,
@@ -267,20 +287,35 @@ export async function runSyncOp(
         priority: mut.priority,
         projectId: mut.paperclipProjectId,
       });
-      nextLedger = upsertLedgerEntry(nextLedger, buildLedgerEntryFromMutation(mut, created.id, now), now);
-      appliedCount += 1;
-    } else if (mut.action === "update" && mut.paperclipIssueId && mut.paperclipCompanyId) {
+      return {
+        applied: true,
+        ledgerEntry: buildLedgerEntryFromMutation(mut, created.id, now),
+      };
+    }
+    if (mut.action === "update" && mut.paperclipIssueId && mut.paperclipCompanyId) {
       const updated = await client.updateIssue(mut.paperclipIssueId, {
         title: mut.title,
         description: mut.description,
         status: mut.targetStatus as PaperclipIssueStatus,
         priority: mut.priority,
       });
-      nextLedger = upsertLedgerEntry(nextLedger, buildLedgerEntryFromMutation(mut, updated.id, now), now);
-      appliedCount += 1;
+      return {
+        applied: true,
+        ledgerEntry: buildLedgerEntryFromMutation(mut, updated.id, now),
+      };
+    }
+    return { applied: false, ledgerEntry: undefined };
+  });
+
+  let nextLedger = ledger;
+  let appliedCount = 0;
+  for (const outcome of outcomes) {
+    if (outcome.applied) appliedCount += 1;
+    if (outcome.ledgerEntry) {
+      nextLedger = upsertLedgerEntry(nextLedger, outcome.ledgerEntry, now);
     }
   }
 
   saveLedgerAtomic(nextLedger, { ledgerPath: deps.ledgerPath, fmHome });
-  return { ...plan, mode: "apply", appliedCount };
+  return { ...plan, orgs: orgsSummary, mode: "apply", appliedCount };
 }

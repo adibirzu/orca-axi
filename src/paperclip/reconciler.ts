@@ -109,23 +109,8 @@ function deriveIssueTarget(
   fmForIssue: FirstMateTaskSnapshot | undefined,
   ledgerFmTaskId: string | undefined,
   custody: CustodySnapshot,
+  isTracked: boolean,
 ): DerivedTarget | null {
-  const mergedPr = prsForIssue.find((pr) => pr.state === "MERGED");
-  if (mergedPr) {
-    return {
-      paperclipStatus: "done",
-      linearTargetState: "Done",
-      githubPrUrl: mergedPr.url,
-      ciState: mergedPr.ciState,
-      fmTaskId: fmForIssue?.taskId ?? ledgerFmTaskId ?? null,
-      fencedBy: null,
-      mergedRepo: mergedPr.repo,
-      eligibleForReadyQueue: false,
-      reason: `Merged PR ${mergedPr.url}`,
-    };
-  }
-  if (issue.stateType === "canceled") return null;
-
   const openPr = prsForIssue.find((pr) => pr.state === "OPEN");
   if (openPr) {
     return {
@@ -138,6 +123,52 @@ function deriveIssueTarget(
       mergedRepo: null,
       eligibleForReadyQueue: false,
       reason: `Open PR ${openPr.url} (CI: ${openPr.ciState})`,
+    };
+  }
+
+  if (issue.stateType === "canceled") {
+    if (!isTracked) return null;
+    return {
+      paperclipStatus: "cancelled",
+      linearTargetState: null,
+      githubPrUrl: null,
+      ciState: null,
+      fmTaskId: ledgerFmTaskId ?? null,
+      fencedBy: null,
+      mergedRepo: null,
+      eligibleForReadyQueue: false,
+      reason: `Canceled in Linear (${issue.stateName})`,
+    };
+  }
+
+  const mergedPr = prsForIssue.find((pr) => pr.state === "MERGED");
+  if (mergedPr) {
+    if (issue.stateType === "completed" && !isTracked) return null;
+    return {
+      paperclipStatus: "done",
+      linearTargetState: "Done",
+      githubPrUrl: mergedPr.url,
+      ciState: mergedPr.ciState,
+      fmTaskId: fmForIssue?.taskId ?? ledgerFmTaskId ?? null,
+      fencedBy: null,
+      mergedRepo: mergedPr.repo,
+      eligibleForReadyQueue: false,
+      reason: `Merged PR ${mergedPr.url}`,
+    };
+  }
+
+  if (issue.stateType === "completed") {
+    if (!isTracked) return null;
+    return {
+      paperclipStatus: "done",
+      linearTargetState: null,
+      githubPrUrl: null,
+      ciState: null,
+      fmTaskId: ledgerFmTaskId ?? null,
+      fencedBy: null,
+      mergedRepo: null,
+      eligibleForReadyQueue: false,
+      reason: `Completed in Linear (${issue.stateName})`,
     };
   }
 
@@ -178,7 +209,6 @@ function deriveIssueTarget(
     };
   }
 
-  if (issue.stateType === "completed") return null;
   if (issue.blockedBy.length > 0) {
     return {
       paperclipStatus: "blocked",
@@ -246,6 +276,11 @@ export function reconcileFourWay(input: ReconcileInput): SyncPlan {
 
     const key = issue.identifier.toUpperCase();
     const ledgerEntry = input.ledger.entries[key];
+    const existingPcp = findMatchingPaperclipIssue(
+      key,
+      input.paperclipIssuesByOrg[gov.org.slug] ?? [],
+      ledgerEntry?.paperclipIssueId,
+    );
     const derived = deriveIssueTarget(
       input.orgsConfig,
       issue,
@@ -253,6 +288,7 @@ export function reconcileFourWay(input: ReconcileInput): SyncPlan {
       fmByIssue.get(key),
       ledgerEntry?.fmTaskId,
       input.custody,
+      Boolean(existingPcp || ledgerEntry),
     );
     if (!derived) continue;
 
@@ -298,11 +334,6 @@ export function reconcileFourWay(input: ReconcileInput): SyncPlan {
     }
 
     const orgInstance = input.orgCompanyMap[gov.org.slug];
-    const existingPcp = findMatchingPaperclipIssue(
-      key,
-      input.paperclipIssuesByOrg[gov.org.slug] ?? [],
-      ledgerEntry?.paperclipIssueId,
-    );
     const alreadySynced =
       Boolean(existingPcp) &&
       existingPcp?.status === derived.paperclipStatus &&
@@ -339,9 +370,12 @@ export function reconcileFourWay(input: ReconcileInput): SyncPlan {
         priority: issue.priority,
         paperclipPriority: pcpPriority,
         orgSlug: gov.org.slug,
+        initiativeId: gov.org.initiativeId,
         projectSlug: gov.project.slug,
         primaryRepo: gov.project.primaryRepo,
         linearUrl: issue.url,
+        state: issue.stateName,
+        stateType: issue.stateType,
       });
     }
   }
@@ -358,5 +392,7 @@ export function reconcileFourWay(input: ReconcileInput): SyncPlan {
     readyQueue: typeof limit === "number" && limit > 0 ? rankedReady.slice(0, limit) : rankedReady,
     fencedItems,
     fleetSyncRepos: Array.from(fleetRepos).sort(),
+    openPrs: input.githubPrs.filter((pr) => pr.state === "OPEN"),
+    mergedPrs: input.githubPrs.filter((pr) => pr.state === "MERGED"),
   };
 }

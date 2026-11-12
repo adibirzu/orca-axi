@@ -279,9 +279,12 @@ export interface ReadyQueueItem {
   readonly priority: number;
   readonly paperclipPriority: PaperclipIssuePriority;
   readonly orgSlug: string;
+  readonly initiativeId?: string;
   readonly projectSlug: string;
   readonly primaryRepo: string | null;
   readonly linearUrl: string;
+  readonly state?: string;
+  readonly stateType?: LinearIssueSnapshot["stateType"];
 }
 
 export interface SyncMutation {
@@ -319,6 +322,8 @@ export interface SyncPlan {
   readonly readyQueue: readonly ReadyQueueItem[];
   readonly fencedItems: readonly FencedCustodyItem[];
   readonly fleetSyncRepos: readonly string[];
+  readonly openPrs?: readonly GitHubPrRollup[];
+  readonly mergedPrs?: readonly GitHubPrRollup[];
 }
 
 export interface GuardDispatchDecision {

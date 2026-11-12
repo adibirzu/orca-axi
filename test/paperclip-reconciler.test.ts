@@ -83,7 +83,7 @@ describe("4-way deterministic reconciler", () => {
         stateName: "In Progress",
         priority: 1,
         projectId: "P-OCD-70",
-        projectUuid: "reviewforge-automatic-github-code-review-4bed8226ecec",
+        projectUuid: "c1ee7da9-3729-4f70-9225-922039ce4897",
         projectName: "ReviewForge — Automatic GitHub Code Review",
         teamKey: "OCD",
         blockedBy: [],
