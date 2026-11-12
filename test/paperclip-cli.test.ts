@@ -196,7 +196,7 @@ describe("paperclip-cyb CLI subcommands", () => {
     const payload = JSON.parse(stdout.join(""));
     expect(payload.success).toBe(true);
     expect(payload.data.organizationsCount).toBe(6);
-    expect(payload.data.projectsCount).toBe(29);
+    expect(payload.data.projectsCount).toBe(30);
     expect(payload.data.apiHealth.status).toBe("ok");
   });
 

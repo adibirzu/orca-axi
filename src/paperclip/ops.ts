@@ -22,6 +22,7 @@ import type {
   SyncPlan,
 } from "./types.js";
 
+export { runDailyOpsOp } from "./daily-ops.js";
 export {
   type PaperclipCliDeps,
   runClaimOp,

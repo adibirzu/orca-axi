@@ -12,7 +12,7 @@ import {
 const CONFIG_PATH = fileURLToPath(new URL("../config/paperclip-orgs.json", import.meta.url));
 
 describe("paperclip governance config & policy", () => {
-  it("loads config/paperclip-orgs.json and maps all 6 initiatives (I-3..I-8) and 29 projects 1:1", () => {
+  it("loads config/paperclip-orgs.json and maps all 6 initiatives (I-3..I-8) and 30 projects 1:1", () => {
     const config = loadPaperclipOrgsConfig({ configPath: CONFIG_PATH });
     expect(config.schemaVersion).toBe("paperclip-orgs.v1");
     expect(config.organizations).toHaveLength(6);
@@ -31,9 +31,10 @@ describe("paperclip governance config & policy", () => {
     expect(initiatives).toEqual(["I-3", "I-4", "I-5", "I-6", "I-7", "I-8"]);
 
     const projectIds = config.organizations.flatMap((o) => o.projects.map((p) => p.id));
-    expect(projectIds).toHaveLength(29);
-    expect(new Set(projectIds).size).toBe(29);
+    expect(projectIds).toHaveLength(30);
+    expect(new Set(projectIds).size).toBe(30);
     expect(projectIds).toContain("P-OCD-70");
+    expect(projectIds).toContain("P-CYB-MOZAIC");
     expect(projectIds).toContain("P-CYB-2");
     expect(projectIds).toContain("P-CYB-72");
     expect(projectIds).toContain("P-CYB-73");

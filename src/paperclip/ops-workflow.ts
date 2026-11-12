@@ -1,4 +1,5 @@
 import { loadBoardAuthConfig, PaperclipClient } from "./client.js";
+import type { DailyOpsClientPort } from "./daily-ops.js";
 import {
   computeIssueContentHash,
   loadLedger,
@@ -31,6 +32,7 @@ export interface PaperclipCliDeps {
   readonly boardEnvPath?: string;
   readonly fmHome?: string;
   readonly client?: PaperclipClient;
+  readonly dailyOpsPort?: DailyOpsClientPort;
   readonly fetchLinearIssues?: (config: PaperclipOrgsConfig) => Promise<LinearIssueSnapshot[]>;
   readonly updateLinearIssueState?: (
     issueUuid: string,

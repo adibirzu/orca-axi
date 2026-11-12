@@ -1,6 +1,6 @@
 {
   "schemaVersion": "paperclip-orgs.v1",
-  "updatedAt": "2026-11-12T08:56:00+02:00",
+  "updatedAt": "2026-11-12T17:40:00+02:00",
   "controlPlane": {
     "primaryApiBase": "https://adi5.tailb55406.ts.net:9448",
     "standbyApiBase": "https://adihost4.tailb55406.ts.net:9448",
@@ -61,6 +61,16 @@
       "controlAgents": [
         {
           "name": "Dot-Ops",
+          "agentId": "639d50bf-9232-43fd-8f25-3e94c5b7a3b8",
+          "role": "pm",
+          "host": "adi4",
+          "adapter": "hermes_gateway",
+          "codingAllowed": false
+        },
+        {
+          "name": "Grok-Scout",
+          "agentId": "9a2a6c4d-cb0b-431f-9028-03646fda07b9",
+          "role": "researcher",
           "host": "adi4",
           "adapter": "hermes_gateway",
           "codingAllowed": false
@@ -160,7 +170,6 @@
             "adibirzu/pai-private",
             "adibirzu/cyberdesk",
             "adibirzu/cyber-sec-web",
-            "adibirzu/mosaichr",
             "adibirzu/homerun"
           ]
         },
@@ -195,6 +204,16 @@
       "controlAgents": [
         {
           "name": "Roel-SecOps",
+          "agentId": "e0ab3ea9-8e35-430c-8af8-58b63a3625d8",
+          "role": "security",
+          "host": "adi5",
+          "adapter": "hermes_gateway",
+          "codingAllowed": false
+        },
+        {
+          "name": "Grok-Scout",
+          "agentId": "5f5788d8-1304-4f2d-be6f-2da1d2a715e0",
+          "role": "researcher",
           "host": "adi5",
           "adapter": "hermes_gateway",
           "codingAllowed": false
@@ -326,6 +345,8 @@
       "controlAgents": [
         {
           "name": "Dot-Ops",
+          "agentId": "1df8f13a-3cdb-4bae-9f41-e6830f28cfd2",
+          "role": "pm",
           "host": "adi4",
           "adapter": "hermes_gateway",
           "codingAllowed": false
@@ -367,6 +388,17 @@
             "adibirzu/rkm-trans",
             "adibirzu/roel-trans-web",
             "adibirzu/rkm-intel"
+          ]
+        },
+        {
+          "id": "P-CYB-MOZAIC",
+          "slug": "mozaic-hr",
+          "name": "Mozaic HR",
+          "linearUuid": "df9181d2-22c4-42b8-afdd-b1c0751fb0c0",
+          "linearTeam": "CYB",
+          "primaryRepo": "adibirzu/mosaichr",
+          "repos": [
+            "adibirzu/mosaichr"
           ]
         },
         {
@@ -431,6 +463,8 @@
       "controlAgents": [
         {
           "name": "Dot-Ops",
+          "agentId": "c007ef32-1b5c-4d34-9a28-bc90830e09c6",
+          "role": "pm",
           "host": "adi4",
           "adapter": "hermes_gateway",
           "codingAllowed": false
@@ -516,6 +550,8 @@
       "controlAgents": [
         {
           "name": "Roel-SecOps",
+          "agentId": "d6ff0ff8-6c11-4ce1-8151-0822f7b50e54",
+          "role": "security",
           "host": "adi5",
           "adapter": "hermes_gateway",
           "codingAllowed": false
@@ -649,12 +685,16 @@
       "controlAgents": [
         {
           "name": "Dot-Ops",
+          "agentId": "627e5fec-a564-4504-8da6-7afedeb03ac8",
+          "role": "pm",
           "host": "adi4",
           "adapter": "hermes_gateway",
           "codingAllowed": false
         },
         {
           "name": "Roel-SecOps",
+          "agentId": "f7fdd51e-0a24-4e4b-96e1-56f0886c5057",
+          "role": "security",
           "host": "adi5",
           "adapter": "hermes_gateway",
           "codingAllowed": false
@@ -713,5 +753,346 @@
       "firstmateAgentId": "d1ffc496-358f-4ed8-ae9c-d9126da26714",
       "portfolioDomain": "06-labs-and-archive"
     }
-  ]
+  ],
+  "dailyOps": {
+    "timezone": "Europe/Bucharest",
+    "allowedAdapters": [
+      "hermes_gateway",
+      "http"
+    ],
+    "companySidebarOrder": [
+      "FLE",
+      "PEN",
+      "ENT",
+      "AIV",
+      "CLO",
+      "RES"
+    ],
+    "preferredProjectOrder": {
+      "FLE": [
+        "FirstMate",
+        "Orca & AXI Plugins",
+        "Harness Library",
+        "Hermes adi4 - Dot / Optimus",
+        "uzi",
+        "ReviewForge — Automatic GitHub Code Review"
+      ],
+      "PEN": [
+        "Pentforge Documentum",
+        "Pentforge App",
+        "Pentforge Forja",
+        "Cyber-bot.ro",
+        "Pentforge Web",
+        "Cyberbot",
+        "Norcode AI Security"
+      ],
+      "ENT": [
+        "Transport Management",
+        "Mozaic HR",
+        "RAI Accounting SaaS",
+        "Roel Hermes adi5",
+        "Smart Dispatch",
+        "Quo Freight Flow"
+      ],
+      "AIV": [
+        "ATLAS",
+        "Annabella",
+        "Cyberbot ElevenLabs Voice + KB",
+        "manuale-rag"
+      ],
+      "CLO": [
+        "AetherOps",
+        "OCI Observability Starter Kit",
+        "OraFuse",
+        "adi1 Cleanup",
+        "NAS + Humble Knowledge Library"
+      ],
+      "RES": [
+        "OCI API Contract Framework",
+        "Local OCR + RAG adi1"
+      ]
+    },
+    "projectLeadAgentOverrides": {
+      "OCI API Contract Framework": "Roel-SecOps"
+    },
+    "goalsByOrg": {
+      "FLE": [
+        {
+          "key": "company",
+          "level": "company",
+          "title": "Unattended Spec -> TDD -> no-mistakes -> Prod-Verified PR Pipeline on adi0",
+          "description": "TELOS G0: Operate a deterministic spec-to-production engineering pipeline on adi0 (FirstMate, Orca & AXI, Harness Library, uzi) with >=80% TDD coverage and automated multi-model PR verification.",
+          "ownerAgentName": "Dot-Ops"
+        },
+        {
+          "key": "team",
+          "level": "team",
+          "parentKey": "company",
+          "title": "Zero-Drift 4-Way Control Plane (Linear <-> Paperclip <-> FirstMate/Grok <-> ObsidianDB) & Strict Custody Governance",
+          "description": "Maintain synchronized state across Linear, Paperclip, FirstMate/Grok, and LifeOS Vault while enforcing the adi0-only coding boundary and ReviewForge (P-OCD-70) private custody separation.",
+          "ownerAgentName": "Dot-Ops"
+        }
+      ],
+      "PEN": [
+        {
+          "key": "company",
+          "level": "company",
+          "title": "Ship Pentforge Commercial Suite (Documentum, Pentforge App/Forja, Cyber-bot.ro) from 70% to Revenue-Ready Prod",
+          "description": "TELOS G1 Finisher-First priority: close the final 30% production readiness gap across Pentforge Documentum, Pentforge App, Pentforge Forja, Pentforge Web, and Cyber-bot.ro e-commerce.",
+          "ownerAgentName": "Roel-SecOps"
+        },
+        {
+          "key": "team",
+          "level": "team",
+          "parentKey": "company",
+          "title": "Mandatory Multi-Model Security Gate & Zero-Leak Tenant Isolation (pentforge-rai-policy)",
+          "description": "Enforce cross-family security review on every release and strict boundary isolation between Pentforge security products and RAI Accounting (`pentforge-rai-policy`).",
+          "ownerAgentName": "Roel-SecOps"
+        }
+      ],
+      "ENT": [
+        {
+          "key": "company",
+          "level": "company",
+          "title": "Close Mozaic HR Security Hardening (5 Paying Tenants) & Maintain RKM Trans (crm.rkm-trans.eu) #1 Operational Reliability",
+          "description": "TELOS G7 + #1 Commercial SLA: complete the 7-item Mozaic HR trust-hardening sprint to onboard 5 paying tenants while sustaining zero-regression daily operations on RKM Trans (`crm.rkm-trans.eu`).",
+          "ownerAgentName": "Dot-Ops"
+        },
+        {
+          "key": "team",
+          "level": "team",
+          "parentKey": "company",
+          "title": "Automate RAI Accounting, Roel WhatsApp Order Flow & Smart/Quo Dispatch Pipelines",
+          "description": "Advance deterministic parser coverage, WhatsApp order intake reliability, and dispatch automation across RAI Accounting SaaS, Roel Hermes adi5, Smart Dispatch, and Quo Freight Flow.",
+          "ownerAgentName": "Dot-Ops"
+        }
+      ],
+      "AIV": [
+        {
+          "key": "company",
+          "level": "company",
+          "title": "Productionize ATLAS, Annabella & Cyberbot ElevenLabs Voice/RAG Knowledge Apps",
+          "description": "Ship latency-verified, production-grade AI voice and knowledge applications across ATLAS, Annabella, and Cyberbot ElevenLabs Voice + KB.",
+          "ownerAgentName": "Dot-Ops"
+        },
+        {
+          "key": "team",
+          "level": "team",
+          "parentKey": "company",
+          "title": "Cross-Family Evaluation & Grounded Retrieval Quality (manuale-rag & Voice KB)",
+          "description": "Maintain grounded citation benchmarks, hallucination regression suites, and cross-model retrieval evaluation for manuale-rag and voice knowledge bases.",
+          "ownerAgentName": "Dot-Ops"
+        }
+      ],
+      "CLO": [
+        {
+          "key": "company",
+          "level": "company",
+          "title": "AetherOps Autonomous Cloud Ops (Grok-Enabled) & 100% (45/45) Fleet/DGX Observability",
+          "description": "Sustain 45/45 Prometheus/Grafana/Loki target coverage on observe.cyber-sec.ro and advance AetherOps autonomous cloud operations under strict harness governance (grok/codex/claude permitted; agy/cursor blocked).",
+          "ownerAgentName": "Roel-SecOps"
+        },
+        {
+          "key": "team",
+          "level": "team",
+          "parentKey": "company",
+          "title": "OCI Observability Starter Kit (22 Repos), OraFuse & DGX Spark adi1 Hygiene",
+          "description": "Keep the 22-repo OCI Observability Starter Kit, OraFuse, NAS + Humble Knowledge Library, and DGX Spark adi1/adi2 compute hygiene clean and drift-free.",
+          "ownerAgentName": "Roel-SecOps"
+        }
+      ],
+      "RES": [
+        {
+          "key": "company",
+          "level": "company",
+          "title": "Scout-First Incubation Under $100/mo Cap — Park New Builds Until Active FLE/PEN/ENT 70% Epics Ship",
+          "description": "TELOS Challenge C4 Finisher Guardrail: constrain research & lab work (OCI API Contract Framework, Local OCR + RAG adi1) to lightweight scouting and contract design under $100/mo until flagship commercial 70% epics reach 100% production.",
+          "ownerAgentName": "Dot-Ops"
+        }
+      ]
+    },
+    "commonSkills": [
+      {
+        "slug": "isa-finisher-gate",
+        "name": "ISA & Finisher-First 70%->100% Gate",
+        "tagline": "Mandatory Implementation Spec & Finisher-First WIP discipline before coding dispatch",
+        "description": "Enforces Adrian's Finisher-First 70%->100% rule and complete ISA/DoD checklists prior to FirstMate-adi0 execution.",
+        "categories": [
+          "governance",
+          "planning"
+        ],
+        "markdown": "# ISA & Finisher-First (`70% -> 100%`) Gate\n\n## Purpose\nPrevent half-finished 70% epics (TELOS Challenge `C0`/`C4`) and ambiguous coding handoffs across the 6 Cyber-Sec / Pentforge organizations.\n\n## Mandatory Pre-Dispatch Checklist (ISA / DoD)\nBefore assigning or escalating any repository change to `FirstMate-adi0`:\n1. **Finisher-First Check**: Confirm active commercial WIP does not exceed 3 concurrent epics and prioritize closing existing 70% work over starting net-new builds.\n2. ** Vault & Control-Plane Context**: Query `memory-query` (`--safe`) and `paperclip-ops` so prior ADRs, regressions, and open issues are accounted for.\n3. **Explicit Scope Boundary**: State exact target repository (`adi0`), in-scope files/modules, and explicit out-of-scope items.\n4. **TDD & Verification Bar**: Specify unit, integration, and E2E acceptance criteria (`>=80%` test coverage + `no-mistakes` verification).\n5. **Captain Decision Card Rule**: If human judgment is required, present **one** concise decision card at a time with recommended option first, cost/risk impact, and rollback plan.\n"
+      },
+      {
+        "slug": "adi0-dispatch-protocol",
+        "name": "adi0 FirstMate Coding Dispatch Protocol",
+        "tagline": "Strict control-plane vs adi0 execution separation and PR verification contract",
+        "description": "Defines how Paperclip Hermes coordinators hand off repository work to FirstMate-adi0 while keeping VPS nodes non-coding.",
+        "categories": [
+          "architecture",
+          "execution"
+        ],
+        "markdown": "# `adi0` FirstMate Coding Dispatch Protocol\n\n## Core Invariant\nAll repository checkouts, code edits, builds, test runs, and git operations execute **exclusively on `adi0`** (`Mac Studio M3 Ultra`) via `FirstMate-adi0`. VPS hosts (`adi4`, `adi5`) operate strictly as orchestration, scouting, observability, and review control planes.\n\n## Handoff Steps\n1. Attach project, active Company/Team Goal, and complete ISA specification to the Paperclip issue.\n2. Verify custody & harness rules:\n   - `ReviewForge` (`P-OCD-70`): private `adibirzu/reviewforge` on `adi0` only; zero overlap with employer IP.\n   - `AetherOps`: `grok`, `codex`, `claude` harnesses allowed; `agy` and `cursor` blocked.\n   - `pentforge-rai-policy`: strict separation between Pentforge security products and RAI Accounting.\n3. Delegate implementation to `FirstMate-adi0` and review returned PR evidence (test output, coverage >=80%, security scan, deployment health).\n"
+      }
+    ],
+    "skillsByOrg": {
+      "FLE": [
+        {
+          "slug": "fleet-custody-governance",
+          "name": "Fleet Control-Plane Sync & Custody Fence",
+          "tagline": "4-way control-plane alignment and ReviewForge P-OCD-70 custody enforcement",
+          "description": "Maintains zero-drift alignment across Linear, Paperclip, FirstMate/Grok, and ObsidianDB with strict repo custody rules.",
+          "categories": [
+            "fleet",
+            "governance"
+          ],
+          "markdown": "# Fleet Control-Plane Sync & Custody Fence (`CYB01 FLE`)\n\n- Keep `FirstMate`, `Orca & AXI Plugins`, `Harness Library`, `Hermes adi4`, and `uzi` aligned across Linear, Paperclip, and LifeOS Vault.\n- Enforce `ReviewForge` (`P-OCD-70`) custody isolation (`adibirzu/reviewforge` private repo on `adi0`).\n- Cap routine briefs to actionable blockers, 70%->100% finishers, and 1-at-a-time Captain cards.\n"
+        }
+      ],
+      "PEN": [
+        {
+          "slug": "secops-pentforge-review",
+          "name": "Pentforge Product Security & Tenant Isolation Gate",
+          "tagline": "Multi-model security review for Pentforge Suite, Documentum & Cyber-bot.ro",
+          "description": "Applies adversarial security checks, tenant isolation rules, and pentforge-rai-policy separation across CYB02 PEN.",
+          "categories": [
+            "security",
+            "pentforge"
+          ],
+          "markdown": "# Pentforge Product Security & Tenant Isolation Gate (`CYB02 PEN`)\n\n- Prioritize `Pentforge Documentum`, `Pentforge App`, `Pentforge Forja`, and `Cyber-bot.ro` 70%->100% production readiness (`G1`).\n- Verify tenant boundary enforcement, authz checks, rate limiting, and schema validation on every release candidate.\n- Enforce `pentforge-rai-policy`: never share customer datasets, runtime secrets, or tenant resources between Pentforge products and RAI Accounting.\n"
+        }
+      ],
+      "ENT": [
+        {
+          "slug": "rkm-mozaic-rai-ops",
+          "name": "RKM Trans SLA, Mozaic HR G7 & RAI Ops Playbook",
+          "tagline": "Commercial reliability playbook for RKM Trans, Mozaic HR G7, and RAI Accounting",
+          "description": "Guides daily operational SLA checks for RKM Trans, Mozaic HR 5-tenant hardening, and RAI/Roel dispatch flows.",
+          "categories": [
+            "enterprise",
+            "operations"
+          ],
+          "markdown": "# RKM Trans SLA, Mozaic HR `G7` & RAI Ops Playbook (`CYB03 ENT`)\n\n1. **RKM Trans (`crm.rkm-trans.eu`)**: #1 live operational SLA — check parser coverage, queue health, and carrier/order exceptions every weekday morning.\n2. **Mozaic HR (`P-CYB-MOZAIC` / `G7`)**: Drive all 7 security & trust-hardening checklist items to closure before onboarding the first 5 paying tenants.\n3. **RAI Accounting & Roel Dispatch**: Maintain strict tenant data isolation (`pentforge-rai-policy`) and deterministic WhatsApp/freight intake validation.\n"
+        }
+      ],
+      "AIV": [
+        {
+          "slug": "voice-rag-eval",
+          "name": "Voice Latency & Grounded RAG Evaluation",
+          "tagline": "Grounded citation and voice response quality gate for ATLAS, Annabella & Cyberbot",
+          "description": "Defines retrieval grounding, citation fidelity, and ElevenLabs voice latency checks for CYB04 AIV.",
+          "categories": [
+            "ai-voice",
+            "evaluation"
+          ],
+          "markdown": "# Voice Latency & Grounded RAG Evaluation (`CYB04 AIV`)\n\n- Evaluate `ATLAS`, `Annabella`, `Cyberbot ElevenLabs Voice + KB`, and `manuale-rag` against grounded source retrieval and turn-latency targets.\n- Require cross-family model evaluation before changing system prompts, chunking strategies, or voice turn routing.\n"
+        }
+      ],
+      "CLO": [
+        {
+          "slug": "oci-aetherops-observability",
+          "name": "OCI, AetherOps & 45/45 Fleet Observability",
+          "tagline": "Prometheus/Grafana 45/45 target health, DGX Spark posture, and AetherOps harness rules",
+          "description": "Operationalizes 45/45 fleet observability on observe.cyber-sec.ro, DGX Spark hygiene, and AetherOps harness rules.",
+          "categories": [
+            "cloud",
+            "observability"
+          ],
+          "markdown": "# OCI, AetherOps & `45/45` Fleet Observability (`CYB05 CLO`)\n\n- Verify `45/45` scrape target health across `observe.cyber-sec.ro` (`adi4` Prometheus, Grafana, Loki, Alertmanager) and `adi1`/`adi2` DGX Spark GPU/thermal metrics.\n- Enforce `AetherOps` harness allowlist: `grok`, `codex`, and `claude` allowed; `agy` and `cursor` strictly blocked.\n- Track drift across the 22-repo `OCI Observability Starter Kit`, `OraFuse`, and `NAS + Humble Knowledge Library`.\n"
+        }
+      ],
+      "RES": [
+        {
+          "slug": "scout-incubation-guardrail",
+          "name": "C4 Scout-First Incubation & $100/mo Spend Cap",
+          "tagline": "Protects commercial focus by keeping CYB06 RES scout-only under $100/mo",
+          "description": "Enforces TELOS Challenge C4 so lab projects stay lightweight until commercial 70% epics ship.",
+          "categories": [
+            "research",
+            "finops"
+          ],
+          "markdown": "# `C4` Scout-First Incubation & `$100/mo` Spend Cap (`CYB06 RES`)\n\n- Keep `OCI API Contract Framework` and `Local OCR + RAG adi1` focused on contract validation, benchmarks, and scout briefs under `$100/mo`.\n- Park net-new feature builds whenever `FLE`, `PEN`, or `ENT` has active 70% commercial epics awaiting completion.\n"
+        }
+      ]
+    },
+    "routines": [
+      {
+        "orgCode": "FLE",
+        "title": "Morning Commercial & Fleet Cockpit Brief (07:00 Block Prep)",
+        "cron": "50 6 * * *",
+        "label": "Daily 06:50 Europe/Bucharest",
+        "priority": "high",
+        "assigneeAgentName": "Dot-Ops",
+        "projectName": "FirstMate",
+        "goalKey": "company",
+        "description": "Prepare Adrian's 07:00 commercial & engineering block brief in <=12 lines: check Paperclip & LifeOS Vault state, rank top 3 Finisher-First 70%->100% priorities across FLE/PEN/ENT, and queue at most 1 Captain decision card."
+      },
+      {
+        "orgCode": "ENT",
+        "title": "RKM Trans Daily Ops & Parser Coverage Digest",
+        "cron": "30 7 * * 1-5",
+        "label": "Weekdays 07:30 Europe/Bucharest",
+        "priority": "high",
+        "assigneeAgentName": "Dot-Ops",
+        "projectName": null,
+        "goalKey": "company",
+        "description": "Verify weekday morning operational health for #1 live customer system RKM Trans (crm.rkm-trans.eu), check parser coverage and Mozaic HR G7 sprint status, and prepare ISA specs for FirstMate-adi0."
+      },
+      {
+        "orgCode": "PEN",
+        "title": "Pentforge, Documentum & Cyber-bot.ro SecOps Watch",
+        "cron": "15 8 * * 1-5",
+        "label": "Weekdays 08:15 Europe/Bucharest",
+        "priority": "high",
+        "assigneeAgentName": "Roel-SecOps",
+        "projectName": "Pentforge Documentum",
+        "goalKey": "company",
+        "description": "Run weekday morning SecOps & Finisher-First (G1) review across Pentforge Documentum, Pentforge App, Pentforge Forja, and Cyber-bot.ro, enforcing pentforge-rai-policy tenant isolation."
+      },
+      {
+        "orgCode": "CLO",
+        "title": "Midday Cloud, AetherOps & DGX Spark Fleet Pulse",
+        "cron": "30 13 * * 1-5",
+        "label": "Weekdays 13:30 Europe/Bucharest",
+        "priority": "medium",
+        "assigneeAgentName": "Roel-SecOps",
+        "projectName": null,
+        "goalKey": "company",
+        "description": "Check midday 45/45 target health on observe.cyber-sec.ro, DGX Spark adi1/adi2 GPU & thermal posture, and AetherOps harness compliance (grok/codex/claude allowed; agy/cursor blocked)."
+      },
+      {
+        "orgCode": "FLE",
+        "title": "Evening 18:00 Shift-Handoff & Commercial Build Queue",
+        "cron": "50 17 * * 1-5",
+        "label": "Weekdays 17:50 Europe/Bucharest",
+        "priority": "high",
+        "assigneeAgentName": "Dot-Ops",
+        "projectName": "Orca & AXI Plugins",
+        "goalKey": "team",
+        "description": "Prepare Adrian's 18:00 evening commercial build handoff: reconcile state across all 6 orgs, enforce max-3 active commercial epic WIP cap, and rank 1-2 ISA-ready issues for FirstMate-adi0."
+      },
+      {
+        "orgCode": "ENT",
+        "title": "Weekly Commercial Wrap: RKM Trans, Mozaic HR G7 & RAI Accounting",
+        "cron": "30 16 * * 5",
+        "label": "Fridays 16:30 Europe/Bucharest",
+        "priority": "high",
+        "assigneeAgentName": "Dot-Ops",
+        "projectName": null,
+        "goalKey": "company",
+        "description": "Compile Friday commercial scorecards for RKM Trans stability, Mozaic HR G7 7-item security burn-down toward 5 paying tenants, and RAI Accounting / dispatch milestones."
+      },
+      {
+        "orgCode": "PEN",
+        "title": "Weekly E-Commerce Growth (Cyber-bot.ro) & Incubation WIP Audit",
+        "cron": "30 8 * * 1",
+        "label": "Mondays 08:30 Europe/Bucharest",
+        "priority": "medium",
+        "assigneeAgentName": "Roel-SecOps",
+        "projectName": null,
+        "goalKey": "company",
+        "description": "Review Monday Cyber-bot.ro storefront/checkout/security posture, Pentforge funnel blockers, and CYB06 RES <$100/mo scout guardrail compliance."
+      }
+    ]
+  }
 }

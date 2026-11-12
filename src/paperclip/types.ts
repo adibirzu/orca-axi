@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { DailyOpsSpecSchema } from "./daily-ops-types.js";
+
 export const PAPERCLIP_ISSUE_STATUSES = [
   "backlog",
   "todo",
@@ -108,6 +110,8 @@ export const GlobalCustodyFencesSchema = z.object({
 
 export const ControlAgentSpecSchema = z.object({
   name: z.string().min(1),
+  agentId: z.string().min(1).optional(),
+  role: z.string().min(1).optional(),
   host: z.string().min(1),
   adapter: z.string().min(1),
   codingAllowed: z.literal(false),
@@ -177,6 +181,7 @@ export const PaperclipOrgsConfigSchema = z.object({
     custodyFences: GlobalCustodyFencesSchema,
   }),
   organizations: z.array(PaperclipOrgSpecSchema).length(6).readonly(),
+  dailyOps: DailyOpsSpecSchema.optional(),
 });
 export type PaperclipOrgsConfig = z.infer<typeof PaperclipOrgsConfigSchema>;
 
