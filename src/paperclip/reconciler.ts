@@ -102,6 +102,25 @@ function findMatchingPaperclipIssue(
   return orgIssues.find((item) => item.title.trim().toUpperCase().startsWith(upperPrefix));
 }
 
+function makeDerived(
+  paperclipStatus: PaperclipIssueStatus,
+  reason: string,
+  overrides: Partial<Omit<DerivedTarget, "paperclipStatus" | "reason">> = {},
+): DerivedTarget {
+  return {
+    paperclipStatus,
+    linearTargetState: null,
+    githubPrUrl: null,
+    ciState: null,
+    fmTaskId: null,
+    fencedBy: null,
+    mergedRepo: null,
+    eligibleForReadyQueue: false,
+    reason,
+    ...overrides,
+  };
+}
+
 function deriveIssueTarget(
   config: PaperclipOrgsConfig,
   issue: LinearIssueSnapshot,
@@ -113,63 +132,40 @@ function deriveIssueTarget(
 ): DerivedTarget | null {
   const openPr = prsForIssue.find((pr) => pr.state === "OPEN");
   if (openPr) {
-    return {
-      paperclipStatus: "in_review",
+    return makeDerived("in_review", `Open PR ${openPr.url} (CI: ${openPr.ciState})`, {
       linearTargetState: "In Review",
       githubPrUrl: openPr.url,
       ciState: openPr.ciState,
       fmTaskId: fmForIssue?.taskId ?? ledgerFmTaskId ?? null,
-      fencedBy: null,
-      mergedRepo: null,
-      eligibleForReadyQueue: false,
-      reason: `Open PR ${openPr.url} (CI: ${openPr.ciState})`,
-    };
+    });
   }
 
   if (issue.stateType === "canceled") {
-    if (!isTracked) return null;
-    return {
-      paperclipStatus: "cancelled",
-      linearTargetState: null,
-      githubPrUrl: null,
-      ciState: null,
-      fmTaskId: ledgerFmTaskId ?? null,
-      fencedBy: null,
-      mergedRepo: null,
-      eligibleForReadyQueue: false,
-      reason: `Canceled in Linear (${issue.stateName})`,
-    };
+    return isTracked
+      ? makeDerived("cancelled", `Canceled in Linear (${issue.stateName})`, {
+          fmTaskId: ledgerFmTaskId ?? null,
+        })
+      : null;
   }
 
   const mergedPr = prsForIssue.find((pr) => pr.state === "MERGED");
   if (mergedPr) {
     if (issue.stateType === "completed" && !isTracked) return null;
-    return {
-      paperclipStatus: "done",
+    return makeDerived("done", `Merged PR ${mergedPr.url}`, {
       linearTargetState: "Done",
       githubPrUrl: mergedPr.url,
       ciState: mergedPr.ciState,
       fmTaskId: fmForIssue?.taskId ?? ledgerFmTaskId ?? null,
-      fencedBy: null,
       mergedRepo: mergedPr.repo,
-      eligibleForReadyQueue: false,
-      reason: `Merged PR ${mergedPr.url}`,
-    };
+    });
   }
 
   if (issue.stateType === "completed") {
-    if (!isTracked) return null;
-    return {
-      paperclipStatus: "done",
-      linearTargetState: null,
-      githubPrUrl: null,
-      ciState: null,
-      fmTaskId: ledgerFmTaskId ?? null,
-      fencedBy: null,
-      mergedRepo: null,
-      eligibleForReadyQueue: false,
-      reason: `Completed in Linear (${issue.stateName})`,
-    };
+    return isTracked
+      ? makeDerived("done", `Completed in Linear (${issue.stateName})`, {
+          fmTaskId: ledgerFmTaskId ?? null,
+        })
+      : null;
   }
 
   const fence = evaluateCustodyFence(config, {
@@ -178,17 +174,9 @@ function deriveIssueTarget(
     custody,
   });
   if (fence.fenced) {
-    return {
-      paperclipStatus: "blocked",
-      linearTargetState: null,
-      githubPrUrl: null,
-      ciState: null,
-      fmTaskId: null,
+    return makeDerived("blocked", fence.reason ?? "External custody fence", {
       fencedBy: fence.fencedBy ?? custody.reviewforgeHost,
-      mergedRepo: null,
-      eligibleForReadyQueue: false,
-      reason: fence.reason ?? "External custody fence",
-    };
+    });
   }
 
   const activeFmId =
@@ -341,6 +329,10 @@ export function reconcileFourWay(input: ReconcileInput): SyncPlan {
 
     if (!alreadySynced && orgInstance) {
       const pcpProjectId = orgInstance.projectsBySlug[gov.project.slug];
+      const assigneeId =
+        derived.paperclipStatus === "in_progress" || derived.paperclipStatus === "in_review"
+          ? (orgInstance.firstmateAgentId ?? gov.org.firstmateAgentId)
+          : undefined;
       mutations.push({
         target: "paperclip",
         action: existingPcp ? "update" : "create",
@@ -350,6 +342,7 @@ export function reconcileFourWay(input: ReconcileInput): SyncPlan {
         paperclipCompanyId: orgInstance.companyId,
         ...(pcpProjectId ? { paperclipProjectId: pcpProjectId } : {}),
         ...(existingPcp ? { paperclipIssueId: existingPcp.id } : {}),
+        ...(assigneeId ? { assigneeAgentId: assigneeId } : {}),
         title: pcpTitle,
         description: buildPaperclipDescription(issue, derived),
         targetStatus: derived.paperclipStatus,

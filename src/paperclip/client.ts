@@ -233,6 +233,7 @@ export class PaperclipClient {
       readonly status?: PaperclipIssueStatus;
       readonly priority?: PaperclipIssuePriority;
       readonly projectId?: string;
+      readonly assigneeAgentId?: string;
     },
   ): Promise<PaperclipIssue> {
     return this.request(`/api/companies/${encodeURIComponent(companyId)}/issues`, PaperclipIssueSchema, {
@@ -249,6 +250,7 @@ export class PaperclipClient {
       readonly status?: PaperclipIssueStatus;
       readonly priority?: PaperclipIssuePriority;
       readonly projectId?: string;
+      readonly assigneeAgentId?: string;
       readonly comment?: string;
     },
     runId?: string,

@@ -296,6 +296,7 @@ export interface SyncMutation {
   readonly paperclipCompanyId?: string;
   readonly paperclipProjectId?: string;
   readonly paperclipIssueId?: string;
+  readonly assigneeAgentId?: string;
   readonly title?: string;
   readonly description?: string;
   readonly targetStatus: string;

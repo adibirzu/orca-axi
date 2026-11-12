@@ -286,6 +286,7 @@ export async function runSyncOp(
         status: mut.targetStatus as PaperclipIssueStatus,
         priority: mut.priority,
         projectId: mut.paperclipProjectId,
+        ...(mut.assigneeAgentId ? { assigneeAgentId: mut.assigneeAgentId } : {}),
       });
       return {
         applied: true,
@@ -298,6 +299,7 @@ export async function runSyncOp(
         description: mut.description,
         status: mut.targetStatus as PaperclipIssueStatus,
         priority: mut.priority,
+        ...(mut.assigneeAgentId ? { assigneeAgentId: mut.assigneeAgentId } : {}),
       });
       return {
         applied: true,

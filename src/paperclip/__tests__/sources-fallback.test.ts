@@ -502,5 +502,48 @@ describe("3-tier headless Linear resolution, bounded PR concurrency, and clutter
     expect(
       plan.mutations.some((m) => m.linearIdentifier === "CYB-89" && m.targetStatus === "done"),
     ).toBe(true);
+
+    const activePlan = reconcileFourWay({
+      orgsConfig: config,
+      orgCompanyMap: {
+        "cyb-01-fleet-harness": {
+          companyId: "comp-01",
+          firstmateAgentId: "193a6cbc-4592-4338-b91c-24d60456cc5c",
+          projectsBySlug: { firstmate: "pcp-proj-fm" },
+        },
+      },
+      linearIssues: [
+        {
+          id: "u-prog",
+          identifier: "CYB-90",
+          title: "Started work requiring assignee on Paperclip",
+          description: "",
+          url: "https://linear.app/cyber-sec/issue/CYB-90",
+          stateType: "started",
+          stateName: "In Progress",
+          priority: 1,
+          projectId: "P-CYB-72",
+          projectUuid: "0660fe2f-23d4-43bf-9e2e-700ba8a57b99",
+          projectName: "FirstMate",
+          teamKey: "CYB",
+          blockedBy: [],
+        },
+      ],
+      paperclipIssuesByOrg: { "cyb-01-fleet-harness": [] },
+      githubPrs: [],
+      fmTasks: [],
+      custody: {
+        reviewforgeHost: "adrians-macbook-pro",
+        fencedIssues: [],
+        adi0CompanionIssues: [],
+        activeBranches: [],
+      },
+      ledger: createEmptyLedger("2026-11-12T09:00:00Z"),
+      now: "2026-11-12T10:00:00Z",
+    });
+
+    const progMut = activePlan.mutations.find((m) => m.linearIdentifier === "CYB-90");
+    expect(progMut?.targetStatus).toBe("in_progress");
+    expect(progMut?.assigneeAgentId).toBe("193a6cbc-4592-4338-b91c-24d60456cc5c");
   });
 });
