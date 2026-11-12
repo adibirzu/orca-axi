@@ -1,15 +1,16 @@
 import { runAxiCli } from "axi-sdk-js";
 
+import { agentsCommand, AGENTS_HELP } from "./commands/agents.js";
 import { doctorCommand, DOCTOR_HELP } from "./commands/doctor.js";
 import { fleetCommand, FLEET_HELP } from "./commands/fleet.js";
 import { VERSION } from "./version.js";
 
 export const DESCRIPTION =
-  "Resolve and report the Orca terminal/session runtime binary.";
+  "Resolve the Orca runtime binary and discover working coding agents across your fleet.";
 
-export const TOP_HELP = `usage: orca-axi [fleet|doctor] [flags]
-commands[2]:
-  (none)=fleet, doctor
+export const TOP_HELP = `usage: orca-axi [fleet|agents|projects|doctor] [flags]
+commands[4]:
+  (none)=fleet, agents, projects, doctor
 output:
   Default TOON shows the smallest schema that lets the agent decide next.
   --full adds every candidate path, broken symlink, and session signal.
@@ -20,12 +21,15 @@ notes:
   runtime (1.x, this tool's subject) and the GNOME screen reader on
   Linux desktops. orca-axi probes candidates with --version only and
   refuses (structured report, exit 0) rather than mis-invoke the reader.
-flags[3]:
-  --json, --full, --help, -v/--version
+  agents discovers live coding agents (claude, codex, agy, grok, opencode,
+  cursor, gemini, cline, hermes) across local and SSH fleet machines.
+flags[5]:
+  --json, --full, --all-machines, --help, -v/--version
 examples:
   orca-axi
-  orca-axi fleet --json
-  orca-axi doctor
+  orca-axi agents --all-machines
+  orca-axi agents --all-machines --json
+  orca-axi projects --all-machines
   orca-axi doctor --full
   orca-axi update --check
 `;
@@ -46,6 +50,9 @@ export async function main(options: MainOptions = {}): Promise<void> {
     ...(options.stdout ? { stdout: options.stdout } : {}),
     commands: {
       fleet: (args) => fleetCommand(args),
+      agents: (args) => agentsCommand(args),
+      projects: (args) =>
+        agentsCommand(args.includes("--summary-by-project") ? args : ["--summary-by-project", ...args]),
       doctor: (args) => doctorCommand(args),
     },
     // Bare `orca-axi` is the fleet dashboard (see normalizeArgv); wiring
@@ -53,6 +60,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     home: (args) => fleetCommand(args),
     getCommandHelp: (command) => {
       if (command === "fleet") return FLEET_HELP;
+      if (command === "agents" || command === "projects") return AGENTS_HELP;
       if (command === "doctor") return DOCTOR_HELP;
       return undefined;
     },
@@ -74,7 +82,13 @@ export function normalizeArgv(raw: string[]): string[] {
     return raw;
   }
   const first = raw[0] ?? "";
-  if (first === "fleet" || first === "doctor" || first === "update") {
+  if (
+    first === "fleet" ||
+    first === "agents" ||
+    first === "projects" ||
+    first === "doctor" ||
+    first === "update"
+  ) {
     return raw;
   }
   if (first.startsWith("-")) {

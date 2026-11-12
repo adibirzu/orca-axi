@@ -1,4 +1,5 @@
 import { DESCRIPTION, TOP_HELP } from "./cli.js";
+import { AGENTS_HELP } from "./commands/agents.js";
 import { DOCTOR_HELP } from "./commands/doctor.js";
 import { FLEET_HELP } from "./commands/fleet.js";
 import { VERSION } from "./version.js";
@@ -12,23 +13,24 @@ export function createSkillMarkdown(): string {
   return `---
 name: orca-axi
 description: >
-  Resolve and report the Orca terminal/session runtime binary: which orca
-  is on PATH, runtime vs GNOME screen-reader identity, and the Linux
-  accessibility guard. Use when checking Orca availability, debugging a
-  broken orca shim, or choosing the binary a session should invoke.
+  Resolve and report the Orca terminal/session runtime binary and discover
+  working coding agents across local and remote fleet hosts, organized by
+  project, git branch, Linear issue, and terminal surface (Orca, Herdr, tmux).
 ---
 
 # orca-axi
 
 ${DESCRIPTION} Version ${VERSION}.
 
-Status: **OB-3 scaffold.** \`fleet\` (the no-arg dashboard) and \`doctor\`
-are live. \`update\`/\`update --check\` are built in via axi-sdk-js.
+Status: **Live fleet & agent radar.** \`fleet\` (the no-arg dashboard),
+\`agents\` / \`projects\`, and \`doctor\` are live. \`update\`/\`update --check\`
+are built in via axi-sdk-js.
 
 Run it without a global install:
 
 \`\`\`sh
 npx -y orca-axi
+npx -y orca-axi agents --all-machines
 npx -y orca-axi doctor
 \`\`\`
 
@@ -42,13 +44,21 @@ refuses with a structured report (exit 0) rather than mis-invoke the
 screen reader for terminal control. \`ORCA_CLI_COMMAND\` overrides the
 search when set.
 
+In addition, \`orca-axi agents\` discovers every running coding agent
+(\`claude\`, \`codex\`, \`agy\`, \`grok\`, \`opencode\`, \`cursor\`, \`gemini\`,
+\`cline\`, \`hermes\`) locally and across SSH fleet machines, correlating OS
+processes with Orca worktrees/terminals, Herdr sessions, tmux panes, git
+branches, and Linear issues.
+
 ## Commands
 
 \`\`\`sh
 npx -y orca-axi                       # fleet view (same as: orca-axi fleet)
 npx -y orca-axi fleet --json
+npx -y orca-axi agents --all-machines # cross-machine agent radar
+npx -y orca-axi projects --all-machines
 npx -y orca-axi doctor                # binary diagnosis
-npx -y orca-axi doctor --full          # every candidate path tried
+npx -y orca-axi doctor --full         # every candidate path tried
 npx -y orca-axi doctor --json
 npx -y orca-axi update --check        # current vs latest, no install
 \`\`\`
@@ -62,6 +72,11 @@ ${TOP_HELP}\`\`\`
 
 \`\`\`
 ${FLEET_HELP}\`\`\`
+
+\`agents\` contract:
+
+\`\`\`
+${AGENTS_HELP}\`\`\`
 
 \`doctor\` contract:
 

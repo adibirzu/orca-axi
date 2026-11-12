@@ -23,12 +23,15 @@ npx -y orca-axi
 ## Commands
 
 ```sh
-orca-axi                  # fleet view (same as: orca-axi fleet)
-orca-axi fleet --json
-orca-axi doctor           # binary diagnosis
-orca-axi doctor --full    # every candidate path tried
+orca-axi                                      # fleet view (same as: orca-axi fleet)
+orca-axi fleet --all-machines --json          # fleet binary + cross-machine agent summary
+orca-axi agents [--all-machines] [--json]     # discover all working agents across fleet
+orca-axi agents --project firstmate --active-only
+orca-axi projects --all-machines              # group running agents by project + Linear/docs
+orca-axi doctor                               # binary diagnosis
+orca-axi doctor --full                        # every candidate path tried
 orca-axi doctor --json
-orca-axi update --check   # current vs latest, no install
+orca-axi update --check                       # current vs latest, no install
 ```
 
 `ORCA_CLI_COMMAND` overrides the binary search when set; its value is one
