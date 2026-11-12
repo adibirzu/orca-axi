@@ -283,4 +283,16 @@ export class PaperclipClient {
       z.array(PaperclipActivitySchema),
     );
   }
+
+  async requestJson<T>(
+    path: string,
+    schema: z.ZodType<T>,
+    init: {
+      readonly method?: string;
+      readonly body?: unknown;
+      readonly headers?: Readonly<Record<string, string>>;
+    } = {},
+  ): Promise<T> {
+    return this.request(path, schema, init);
+  }
 }

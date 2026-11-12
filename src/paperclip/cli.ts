@@ -1,6 +1,7 @@
 import {
   type PaperclipCliDeps,
   runClaimOp,
+  runDailyOpsOp,
   runDoctorOp,
   runGuardDispatchOp,
   runOrgsBootstrapOp,
@@ -14,6 +15,7 @@ const HELP_TEXT = `paperclip-cyb — 4-Way Paperclip <-> Linear CYB <-> GitHub <
 Usage:
   paperclip-cyb doctor [--json]
   paperclip-cyb orgs bootstrap [--dry-run|--apply] [--json]
+  paperclip-cyb daily-ops [--dry-run|--apply] [--json]
   paperclip-cyb sync [--project <slug>] [--initiative <I-3..I-8>] [--limit <n>] [--dry-run|--apply] [--json]
   paperclip-cyb guard-dispatch --project <slug> --host <host> --harness <harness> [--issue <id>] [--branch <ref>] [--mcp-action <act>] [--json]
   paperclip-cyb claim <linear-id> --fm-task <id> --worktree <path> [--harness <h>] [--json]
@@ -137,6 +139,18 @@ export async function runPaperclipCybCli(
         asJson,
         { success: true, data: res, error: null },
         `paperclip-cyb orgs bootstrap [${String(res.mode)}]: plannedOrgsToCreate=${String(res.plannedOrgsToCreate)} plannedProjectsToCreate=${String(res.plannedProjectsToCreate)}`,
+      );
+      return 0;
+    }
+
+    if (cmd === "daily-ops") {
+      const apply = Boolean(parsed.flags.apply) && !parsed.flags["dry-run"];
+      const res = await runDailyOpsOp(deps, { apply });
+      emitEnvelope(
+        writeOut,
+        asJson,
+        { success: true, data: res, error: null },
+        `paperclip-cyb daily-ops [${res.mode}]: disableAdapters=${res.adaptersToDisable.length} goals=${res.plannedGoalsToCreate} projects=${res.plannedProjectsToLink} skills=${res.plannedSkillsToCreate} routines=${res.plannedRoutinesToCreate}`,
       );
       return 0;
     }
