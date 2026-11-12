@@ -1,17 +1,17 @@
 ---
 name: orca-axi
 description: >
-  Resolve and report the Orca terminal/session runtime binary and discover
-  working coding agents across local and remote fleet hosts, organized by
-  project, git branch, Linear issue, and terminal surface (Orca, Herdr, tmux).
+  Resolve and report the Orca terminal/session runtime binary, discover
+  working coding agents across local and remote fleet hosts, and inspect the
+  domain-organized workstation portfolio catalog.
 ---
 
 # orca-axi
 
 Resolve the Orca runtime binary and discover working coding agents across your fleet. Version 0.1.0.
 
-Status: **Live fleet & agent radar.** `fleet` (the no-arg dashboard),
-`agents` / `projects`, and `doctor` are live. `update`/`update --check`
+Status: **Live fleet, agent radar & portfolio catalog.** `fleet` (the no-arg dashboard),
+`agents` / `projects`, `portfolio`, and `doctor` are live. `update`/`update --check`
 are built in via axi-sdk-js.
 
 Run it without a global install:
@@ -19,6 +19,7 @@ Run it without a global install:
 ```sh
 npx -y orca-axi
 npx -y orca-axi agents --all-machines
+npx -y orca-axi portfolio
 npx -y orca-axi doctor
 ```
 
@@ -36,7 +37,9 @@ In addition, `orca-axi agents` discovers every running coding agent
 (`claude`, `codex`, `agy`, `grok`, `opencode`, `cursor`, `gemini`,
 `cline`, `hermes`) locally and across SSH fleet machines, correlating OS
 processes with Orca worktrees/terminals, Herdr sessions, tmux panes, git
-branches, and Linear issues.
+branches, and Linear issues. `orca-axi portfolio` reads
+`~/.config/orca-axi/portfolio-catalog.json` to inspect repositories grouped
+across Linear Initiatives, domains, and tiers.
 
 ## Commands
 
@@ -44,7 +47,8 @@ branches, and Linear issues.
 npx -y orca-axi                       # fleet view (same as: orca-axi fleet)
 npx -y orca-axi fleet --json
 npx -y orca-axi agents --all-machines # cross-machine agent radar
-npx -y orca-axi projects --all-machines
+npx -y orca-axi projects --by-domain  # group active projects by portfolio domain
+npx -y orca-axi portfolio             # inspect repository & domain catalog
 npx -y orca-axi doctor                # binary diagnosis
 npx -y orca-axi doctor --full         # every candidate path tried
 npx -y orca-axi doctor --json
@@ -54,9 +58,9 @@ npx -y orca-axi update --check        # current vs latest, no install
 Top-level surface:
 
 ```
-usage: orca-axi [fleet|agents|projects|doctor] [flags]
-commands[4]:
-  (none)=fleet, agents, projects, doctor
+usage: orca-axi [fleet|agents|projects|portfolio|doctor] [flags]
+commands[5]:
+  (none)=fleet, agents, projects, portfolio, doctor
 output:
   Default TOON shows the smallest schema that lets the agent decide next.
   --full adds every candidate path, broken symlink, and session signal.
@@ -69,13 +73,14 @@ notes:
   refuses (structured report, exit 0) rather than mis-invoke the reader.
   agents discovers live coding agents (claude, codex, agy, grok, opencode,
   cursor, gemini, cline, hermes) across local and SSH fleet machines.
+  portfolio inspects ~/.config/orca-axi/portfolio-catalog.json across domains & tiers.
 flags[5]:
   --json, --full, --all-machines, --help, -v/--version
 examples:
   orca-axi
   orca-axi agents --all-machines
-  orca-axi agents --all-machines --json
-  orca-axi projects --all-machines
+  orca-axi projects --all-machines --by-domain
+  orca-axi portfolio --domain 01 --tier 1
   orca-axi doctor --full
   orca-axi update --check
 ```
@@ -109,7 +114,7 @@ examples:
 `agents` contract:
 
 ```
-usage: orca-axi agents [--all-machines] [--project <name>] [--active-only] [--summary-by-project] [--json]
+usage: orca-axi agents [--all-machines] [--project <name>] [--active-only] [--summary-by-project] [--by-domain] [--tier <tier>] [--json]
 description:
   Discover all running coding agents (claude, codex, agy, grok, opencode,
   cursor, gemini, cline, hermes) on this machine and optionally across all
@@ -119,13 +124,34 @@ description:
 outputs:
   TOON summary: totals, machines[], items[] (or projects[] with --summary-by-project)
   --json  machine-readable {agents: ...} envelope
-flags[6]:
-  --all-machines,   --project <name>,   --active-only,   --summary-by-project,   --json, --help
+flags[8]:
+  --all-machines,   --project <name>,   --active-only,   --summary-by-project,   --by-domain,   --tier <tier>,   --json, --help
 examples:
   orca-axi agents
   orca-axi agents --all-machines --json
   orca-axi agents --all-machines --summary-by-project
+  orca-axi projects --by-domain --tier 1
   orca-axi agents --project firstmate --active-only
+```
+
+`portfolio` contract:
+
+```
+usage: orca-axi portfolio [--domain <domain>] [--tier <tier>] [--project <query>] [--stack <stack>] [--full] [--json]
+description:
+  Inspect the workstation repository & Linear initiative catalog stored at
+  ~/.config/orca-axi/portfolio-catalog.json (override via ORCA_AXI_PORTFOLIO_CATALOG).
+  Falls back gracefully (exit 0, status=missing_catalog) when absent.
+outputs:
+  TOON summary: status, primaryStation, totals, domains[] (plus repositories[] with filters or --full)
+  --json  machine-readable {portfolio: ...} envelope
+flags[7]:
+  --domain <domain>,   --tier <tier>,   --project <query>,   --stack <stack>,   --full,   --json, --help
+examples:
+  orca-axi portfolio
+  orca-axi portfolio --domain 02 --tier 1
+  orca-axi portfolio --project P-CYB-71 --json
+  orca-axi portfolio --stack typescript --full
 ```
 
 `doctor` contract:

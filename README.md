@@ -28,6 +28,8 @@ orca-axi fleet --all-machines --json          # fleet binary + cross-machine age
 orca-axi agents [--all-machines] [--json]     # discover all working agents across fleet
 orca-axi agents --project firstmate --active-only
 orca-axi projects --all-machines              # group running agents by project + Linear/docs
+orca-axi projects --by-domain --tier 1        # filter/group active projects by portfolio domain & tier
+orca-axi portfolio [--domain 01] [--tier 1]   # inspect ~/.config/orca-axi/portfolio-catalog.json
 orca-axi doctor                               # binary diagnosis
 orca-axi doctor --full                        # every candidate path tried
 orca-axi doctor --json

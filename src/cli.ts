@@ -3,14 +3,15 @@ import { runAxiCli } from "axi-sdk-js";
 import { agentsCommand, AGENTS_HELP } from "./commands/agents.js";
 import { doctorCommand, DOCTOR_HELP } from "./commands/doctor.js";
 import { fleetCommand, FLEET_HELP } from "./commands/fleet.js";
+import { portfolioCommand, PORTFOLIO_HELP } from "./commands/portfolio.js";
 import { VERSION } from "./version.js";
 
 export const DESCRIPTION =
   "Resolve the Orca runtime binary and discover working coding agents across your fleet.";
 
-export const TOP_HELP = `usage: orca-axi [fleet|agents|projects|doctor] [flags]
-commands[4]:
-  (none)=fleet, agents, projects, doctor
+export const TOP_HELP = `usage: orca-axi [fleet|agents|projects|portfolio|doctor] [flags]
+commands[5]:
+  (none)=fleet, agents, projects, portfolio, doctor
 output:
   Default TOON shows the smallest schema that lets the agent decide next.
   --full adds every candidate path, broken symlink, and session signal.
@@ -23,13 +24,14 @@ notes:
   refuses (structured report, exit 0) rather than mis-invoke the reader.
   agents discovers live coding agents (claude, codex, agy, grok, opencode,
   cursor, gemini, cline, hermes) across local and SSH fleet machines.
+  portfolio inspects ~/.config/orca-axi/portfolio-catalog.json across domains & tiers.
 flags[5]:
   --json, --full, --all-machines, --help, -v/--version
 examples:
   orca-axi
   orca-axi agents --all-machines
-  orca-axi agents --all-machines --json
-  orca-axi projects --all-machines
+  orca-axi projects --all-machines --by-domain
+  orca-axi portfolio --domain 01 --tier 1
   orca-axi doctor --full
   orca-axi update --check
 `;
@@ -53,6 +55,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
       agents: (args) => agentsCommand(args),
       projects: (args) =>
         agentsCommand(args.includes("--summary-by-project") ? args : ["--summary-by-project", ...args]),
+      portfolio: (args) => portfolioCommand(args),
       doctor: (args) => doctorCommand(args),
     },
     // Bare `orca-axi` is the fleet dashboard (see normalizeArgv); wiring
@@ -61,6 +64,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     getCommandHelp: (command) => {
       if (command === "fleet") return FLEET_HELP;
       if (command === "agents" || command === "projects") return AGENTS_HELP;
+      if (command === "portfolio") return PORTFOLIO_HELP;
       if (command === "doctor") return DOCTOR_HELP;
       return undefined;
     },
@@ -86,6 +90,7 @@ export function normalizeArgv(raw: string[]): string[] {
     first === "fleet" ||
     first === "agents" ||
     first === "projects" ||
+    first === "portfolio" ||
     first === "doctor" ||
     first === "update"
   ) {
