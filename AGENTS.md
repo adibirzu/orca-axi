@@ -1,12 +1,8 @@
-# Project agent memory
+# orca-axi
 
-This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
-
-- Build/test: `npm test` (build + vitest), `npm run lint`, `npm run build:skill` (regenerate `skills/orca-axi/SKILL.md`; `test/skill.test.ts` fails when stale).
 - Sharp edge: `orca` is also the GNOME screen reader on Linux desktops. Never invoke a resolved binary for anything beyond the `--version` identity probe in `src/orca-resolve.ts`; the guard refusals there are load-bearing. See `README.md` for the doctrine.
 
-
-- Add durable project-specific notes here as they are discovered through real work.
+Before changing binary resolution, read the [resolver](src/orca-resolve.ts) and [identity regressions](test/resolve.test.ts). [package.json](package.json) owns build, test and lint commands. Regenerate [the skill](skills/orca-axi/SKILL.md) from its [source](src/skill.ts); [the parity test](test/skill.test.ts) rejects stale generated guidance.
 
 ## Maintaining this file
 
