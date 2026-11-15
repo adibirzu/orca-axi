@@ -7,6 +7,7 @@ import {
 } from "./classify.js";
 import type {
   AgentActivityState,
+  AgentCommandRole,
   AgentHarness,
   AgentSurface,
   DiscoveredAgent,
@@ -93,6 +94,44 @@ function findLongestWorktreeMatch(
     }
   }
   return best;
+}
+
+function inferCommandRole(params: {
+  readonly tmuxMatch?: TmuxPaneSnapshot;
+  readonly herdrMatch?: HerdrAgentSnapshot;
+  readonly effectiveCwd: string | null;
+  readonly title: string;
+  readonly harness: AgentHarness;
+  readonly command: string;
+}): AgentCommandRole {
+  const { tmuxMatch, herdrMatch, effectiveCwd, title, harness, command } = params;
+  const tmuxPaneRef = tmuxMatch?.paneRef.toLowerCase() ?? "";
+  const tmuxWin = tmuxMatch?.windowName?.toLowerCase() ?? "";
+  if (tmuxPaneRef.startsWith("admiral:") || /\badmiral\b/i.test(tmuxWin) || /\badmiral\b/i.test(title)) {
+    return "admiral";
+  }
+
+  const labelBlob = [tmuxMatch?.windowName, herdrMatch?.workspaceLabel, title, command]
+    .filter(Boolean)
+    .join(" ");
+  const isWorktreeWorker =
+    effectiveCwd !== null && /\/(?:worktrees|\.treehouse)\//.test(effectiveCwd);
+  const isFirstmateHome =
+    effectiveCwd !== null &&
+    /\/(?:\.firstmate-[^/]+|firstmate)(?:\/|$)/.test(effectiveCwd) &&
+    !isWorktreeWorker;
+
+  if (
+    tmuxPaneRef.startsWith("firstmate:") ||
+    herdrMatch?.session === "fm-remote" ||
+    isFirstmateHome ||
+    /\b(?:firstmate|captain|secondmate|dot-ops|roel-secops|-remote)\b/i.test(labelBlob) ||
+    (harness === "hermes" && /\bgateway\b/i.test(command))
+  ) {
+    return "captain";
+  }
+
+  return "crew";
 }
 
 function primarySurface(surfaces: readonly AgentSurface[]): AgentSurface {
@@ -212,6 +251,15 @@ export function correlateHostAgents(input: CorrelateHostInput): DiscoveredAgent[
           ? `${proc.harness} (${sessionId.slice(0, 8)})`
           : proc.harness;
 
+    const commandRole = inferCommandRole({
+      tmuxMatch,
+      herdrMatch,
+      effectiveCwd,
+      title,
+      harness: proc.harness,
+      command: proc.command,
+    });
+
     return {
       id: `${input.host}:${proc.pid}`,
       host: input.host,
@@ -221,6 +269,7 @@ export function correlateHostAgents(input: CorrelateHostInput): DiscoveredAgent[
       harness: proc.harness,
       surface: primarySurface(surfaces),
       surfaces,
+      commandRole,
       state,
       cpuPercent: proc.cpuPercent,
       elapsed: proc.elapsed || null,

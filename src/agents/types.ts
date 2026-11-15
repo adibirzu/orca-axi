@@ -13,6 +13,8 @@ export type AgentSurface = "orca" | "herdr" | "tmux" | "terminal";
 
 export type AgentActivityState = "working" | "idle" | "bridged";
 
+export type AgentCommandRole = "admiral" | "captain" | "crew";
+
 export interface DocPresence {
   readonly readme: boolean;
   readonly roadmap: boolean;
@@ -28,6 +30,7 @@ export interface DiscoveredAgent {
   readonly harness: AgentHarness;
   readonly surface: AgentSurface;
   readonly surfaces: readonly AgentSurface[];
+  readonly commandRole?: AgentCommandRole;
   readonly state: AgentActivityState;
   readonly cpuPercent: number;
   readonly elapsed: string | null;

@@ -16,6 +16,7 @@ import {
   checkDocPresence,
   collectFleetAgents,
   collectRemoteMachine,
+  DEFAULT_REMOTE_FLEET,
   normalizeLocalHostName,
   parseLsofAgyLocks,
   parseLsofCwds,
@@ -405,9 +406,49 @@ describe("remote SSH fleet probing & CLI commands", () => {
     expect(panes[0]?.paneTty).toBe("ttys005");
     expect(panes[1]?.windowName).toBe("server");
 
+    expect(normalizeLocalHostName("Mac")).toBe("adi0");
     expect(normalizeLocalHostName("Adi0.local")).toBe("adi0");
     expect(normalizeLocalHostName("Adrians-Mini.cyber-sec.ro")).toBe("macmini");
+    expect(normalizeLocalHostName("adi0VM")).toBe("omarchy");
+    expect(normalizeLocalHostName("commandopc")).toBe("commandopc-wsl");
     expect(normalizeLocalHostName("srv2083966")).toBe("adi4");
+    expect(normalizeLocalHostName("adi5")).toBe("adi5");
+
+    expect(DEFAULT_REMOTE_FLEET.map((s) => s.host)).toEqual([
+      "adi0",
+      "adi1",
+      "adi2",
+      "macmini",
+      "omarchy",
+      "commandopc-wsl",
+      "adi4",
+      "adi5",
+    ]);
+
+    const correlatedRoles = correlateHostAgents({
+      host: "adi0",
+      psText: [
+        "  PID  PPID TTY      STAT  %CPU     ELAPSED COMMAND",
+        "80802 80000 ttys000  S+     2.0       10:00 agy --conversation 11111111-1111-1111-1111-111111111111",
+        "80950 80000 ttys001  S+     1.0       05:00 codex --full-auto",
+        "80960 80000 ttys002  R+     5.0       02:00 claude --resume 22222222-2222-2222-2222-222222222222",
+      ].join("\n"),
+      cwdsByPid: new Map([
+        [80802, "/Users/adrianb/dev"],
+        [80950, "/Users/adrianb/dev/firstmate"],
+        [80960, "/Users/adrianb/orca/worktrees/orca-axi/cyb-500"],
+      ]),
+      tmuxPanes: [
+        { paneRef: "admiral:0.0", panePid: 80802, paneTty: "ttys000", panePath: "/Users/adrianb/dev", windowName: "admiral" },
+        { paneRef: "firstmate:0.0", panePid: 80950, paneTty: "ttys001", panePath: "/Users/adrianb/dev/firstmate", windowName: "firstmate" },
+      ],
+      orcaWorktrees: [
+        { id: "wt-1", path: "/Users/adrianb/orca/worktrees/orca-axi/cyb-500", branch: "feat/cyb-500", linkedLinearIssue: "CYB-500" },
+      ],
+    });
+    expect(correlatedRoles.find((a) => a.pid === 80802)?.commandRole).toBe("admiral");
+    expect(correlatedRoles.find((a) => a.pid === 80950)?.commandRole).toBe("captain");
+    expect(correlatedRoles.find((a) => a.pid === 80960)?.commandRole).toBe("crew");
 
     const docs = checkDocPresence(process.cwd());
     expect(docs.readme).toBe(true);

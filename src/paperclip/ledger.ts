@@ -1,15 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import {
-  chmodSync,
-  closeSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeSync,
-} from "node:fs";
+import { existsSync, readFileSync, writeSync, mkdirSync, chmodSync, closeSync, fsyncSync, openSync, renameSync, unlinkSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import {
@@ -36,7 +27,11 @@ export interface ContentHashInput {
   readonly fencedBy: string | null;
 }
 
-const DEFAULT_FM_HOME = "/Users/adrianb/dev/firstmate";
+function resolveDefaultFmHome(): string {
+  const home = homedir();
+  const candidates = [join(home, "dev", "firstmate"), join(home, "GitHub", "firstmate"), join(home, "firstmate")];
+  return candidates.find((cand) => existsSync(cand)) ?? candidates[0]!;
+}
 
 export function resolveLedgerPath(options: LedgerPathOptions = {}): string {
   if (options.ledgerPath) {
@@ -47,7 +42,7 @@ export function resolveLedgerPath(options: LedgerPathOptions = {}): string {
   if (explicit) {
     return resolve(explicit);
   }
-  const fmHome = options.fmHome?.trim() || env.FM_HOME?.trim() || DEFAULT_FM_HOME;
+  const fmHome = options.fmHome?.trim() || env.FM_HOME?.trim() || resolveDefaultFmHome();
   return join(resolve(fmHome), "state", "paperclip-sync", "ledger.json");
 }
 
