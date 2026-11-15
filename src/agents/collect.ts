@@ -25,10 +25,14 @@ export interface RemoteHostSpec {
 }
 
 export const DEFAULT_REMOTE_FLEET: readonly RemoteHostSpec[] = [
+  { host: "adi0", sshTargets: ["adi0", "adi0.local", "mac"] },
   { host: "adi1", sshTargets: ["adi1"] },
   { host: "adi2", sshTargets: ["adi2-ts", "adi2"] },
   { host: "macmini", sshTargets: ["macmini"] },
+  { host: "omarchy", sshTargets: ["omarchy"] },
+  { host: "commandopc-wsl", sshTargets: ["commandopc-wsl"] },
   { host: "adi4", sshTargets: ["adihost4", "adi4"] },
+  { host: "adi5", sshTargets: ["adi5"] },
 ];
 
 const SAFE_HOST_RE = /^[A-Za-z0-9._@-]+$/;
@@ -43,8 +47,12 @@ function validateHostSelector(target: string): string {
 
 export function normalizeLocalHostName(raw: string = osHostname()): string {
   const short = raw.split(".")[0]?.trim().toLowerCase() ?? "local";
+  if (short === "mac" || short === "adi0") return "adi0";
+  if (short === "adi0vm" || short === "omarchy") return "omarchy";
+  if (short === "commandopc" || short === "commandopc-wsl") return "commandopc-wsl";
   if (short.includes("mini")) return "macmini";
-  if (short === "srv2083966" || short === "adihost4") return "adi4";
+  if (short === "srv2083966" || short === "adihost4" || short === "adi4") return "adi4";
+  if (short === "edgexpert-33b0" || short === "adi2") return "adi2";
   return short || "local";
 }
 

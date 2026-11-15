@@ -71,10 +71,10 @@ describe("paperclip governance config & policy", () => {
     expect(unknown).toBeNull();
   });
 
-  it("enforces adi0-only coding execution and rejects adi4, adi5, and adrians-macbook-pro", () => {
+  it("allows registered Captain coding hosts, rejects adi4/adi5 control-plane hosts, and unblocks cursor except on aetherops", () => {
     const config = loadPaperclipOrgsConfig({ configPath: CONFIG_PATH });
 
-    for (const forbiddenHost of ["adi4", "adihost4", "adi5", "adrians-macbook-pro", "vps-node"]) {
+    for (const forbiddenHost of ["adi4", "adihost4", "srv2083966", "adi5", "vps-node"]) {
       const decision = guardDispatch(config, {
         project: "orca-axi",
         host: forbiddenHost,
@@ -85,14 +85,33 @@ describe("paperclip governance config & policy", () => {
       expect(decision.executionTarget).toBe("adi0-firstmate");
     }
 
-    const allowed = guardDispatch(config, {
-      project: "orca-axi",
-      host: "adi0",
-      harness: "codex",
+    for (const codingHost of ["adi0", "adi1", "adi2", "macmini", "omarchy", "commandopc-wsl"]) {
+      const allowed = guardDispatch(config, {
+        project: "orca-axi",
+        host: codingHost,
+        harness: "codex",
+      });
+      expect(allowed.allowed).toBe(true);
+      expect(allowed.code).toBe("ALLOWED");
+      expect(allowed.orgSlug).toBe("cyb-01-fleet-harness");
+    }
+
+    const cursorAllowed = guardDispatch(config, {
+      project: "firstmate",
+      host: "omarchy",
+      harness: "cursor",
     });
-    expect(allowed.allowed).toBe(true);
-    expect(allowed.code).toBe("ALLOWED");
-    expect(allowed.orgSlug).toBe("cyb-01-fleet-harness");
+    expect(cursorAllowed.allowed).toBe(true);
+    expect(cursorAllowed.code).toBe("ALLOWED");
+
+    const mbpOwnIssue = guardDispatch(config, {
+      project: "reviewforge",
+      host: "adrians-macbook-pro",
+      harness: "codex",
+      issueId: "OCD-501",
+    });
+    expect(mbpOwnIssue.allowed).toBe(true);
+    expect(mbpOwnIssue.code).toBe("ALLOWED");
   });
 
   it("enforces aetherops / cyb-05-cloud-infra model ban: rejects agy & cursor, allows grok, codex, claude", () => {

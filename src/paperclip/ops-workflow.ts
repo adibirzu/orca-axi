@@ -1,3 +1,7 @@
+import { homedir, hostname as osHostname } from "node:os";
+import { join } from "node:path";
+
+import { normalizeLocalHostName } from "../agents/collect.js";
 import { loadBoardAuthConfig, PaperclipClient } from "./client.js";
 import type { DailyOpsClientPort } from "./daily-ops.js";
 import {
@@ -12,8 +16,15 @@ import {
   guardDispatch,
   type GuardDispatchRequest,
   loadPaperclipOrgsConfig,
+  resolvePortableHomePath,
+  resolveProjectGovernance,
 } from "./policy.js";
-import { loadCustodySnapshotLive, loadInstanceMap } from "./sources.js";
+import {
+  fetchGitHubPrsLive,
+  loadCustodySnapshotLive,
+  loadInstanceMap,
+  updateLinearIssueStateLive,
+} from "./sources.js";
 import type {
   CustodySnapshot,
   FirstMateTaskSnapshot,
@@ -47,13 +58,22 @@ export interface PaperclipCliDeps {
   readonly now?: () => string;
 }
 
+function defaultFmHome(): string {
+  return join(homedir(), "dev", "firstmate");
+}
+
+function resolveDefaultHost(): string {
+  const fromEnv = process.env.HL_STATION_HOSTNAME?.trim();
+  return normalizeLocalHostName(fromEnv || osHostname());
+}
+
 export function resolveDepsClient(
   deps: PaperclipCliDeps,
   config: PaperclipOrgsConfig,
 ): PaperclipClient {
   if (deps.client) return deps.client;
   const auth = loadBoardAuthConfig({
-    boardEnvPath: deps.boardEnvPath ?? config.controlPlane.boardEnvPath,
+    boardEnvPath: deps.boardEnvPath ?? resolvePortableHomePath(config.controlPlane.boardEnvPath),
   });
   return new PaperclipClient({
     primaryBase: auth.primaryBase,
@@ -69,7 +89,38 @@ export async function runGuardDispatchOp(
 ): Promise<GuardDispatchDecision> {
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
   const custody = await (deps.loadCustodySnapshot ?? loadCustodySnapshotLive)(config);
-  return guardDispatch(config, { ...req, custody });
+  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? defaultFmHome();
+  const ledger = req.ledger ?? loadLedger({ ledgerPath: deps.ledgerPath, fmHome });
+
+  const issueKey = extractCanonicalIssueId(req.issueId);
+  let openPrs = req.openPrs;
+  let liveIssueStatus = req.liveIssueStatus;
+
+  if (issueKey) {
+    if (openPrs === undefined) {
+      const resolved = resolveProjectGovernance(config, req.project);
+      if (resolved && resolved.project.repos.length > 0 && (deps.fetchGitHubPrs || !deps.client)) {
+        try {
+          openPrs = await (deps.fetchGitHubPrs ?? fetchGitHubPrsLive)(resolved.project.repos);
+        } catch {
+          openPrs = undefined;
+        }
+      }
+    }
+
+    const ledgerEntry = ledger.entries[issueKey];
+    if (liveIssueStatus === undefined && ledgerEntry?.paperclipIssueId) {
+      try {
+        const client = resolveDepsClient(deps, config);
+        const liveIssue = await client.getIssue(ledgerEntry.paperclipIssueId);
+        liveIssueStatus = liveIssue.status;
+      } catch {
+        liveIssueStatus = undefined;
+      }
+    }
+  }
+
+  return guardDispatch(config, { ...req, custody, ledger, openPrs, liveIssueStatus });
 }
 
 export async function runClaimOp(
@@ -79,11 +130,15 @@ export async function runClaimOp(
     readonly fmTaskId: string;
     readonly worktree: string;
     readonly harness?: string;
+    readonly host?: string;
+    readonly surface?: string;
+    readonly branch?: string;
+    readonly force?: boolean;
   },
 ): Promise<{ readonly entry: SyncLedgerEntry }> {
   const now = deps.now?.() ?? new Date().toISOString();
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
-  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? "/Users/adrianb/dev/firstmate";
+  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? defaultFmHome();
   const key = extractCanonicalIssueId(input.linearId);
   if (!key) throw new Error(`Invalid Linear issue identifier: ${input.linearId}`);
 
@@ -95,12 +150,41 @@ export async function runClaimOp(
     );
   }
 
+  if (
+    !input.force &&
+    existing.fmTaskId &&
+    existing.fmTaskId !== input.fmTaskId &&
+    (existing.lastPaperclipStatus === "in_progress" || existing.lastPaperclipStatus === "in_review")
+  ) {
+    throw new Error(
+      `ISSUE_ALREADY_CLAIMED: Issue ${key} is already ${existing.lastPaperclipStatus} by FirstMate task '${existing.fmTaskId}' on ${existing.host ?? "unknown"}`,
+    );
+  }
+
+  const host = normalizeLocalHostName(input.host?.trim() || resolveDefaultHost());
+  const surface = input.surface?.trim() || (process.platform === "darwin" ? "orca" : "herdr");
   const client = resolveDepsClient(deps, config);
   await client.updateIssue(existing.paperclipIssueId, { status: "in_progress" });
   await client.addIssueComment(
     existing.paperclipIssueId,
-    `Claimed on adi0 by FirstMate task \`${input.fmTaskId}\` (worktree: \`${input.worktree}\`${input.harness ? `, harness: \`${input.harness}\`` : ""})`,
+    `Claimed on ${host} (${surface}) by FirstMate task \`${input.fmTaskId}\` (worktree: \`${input.worktree}\`${input.branch ? `, branch: \`${input.branch}\`` : ""}${input.harness ? `, harness: \`${input.harness}\`` : ""})`,
   );
+
+  // Best-effort Linear status transition to In Progress
+  const org = config.organizations.find((o) => o.slug === existing.orgSlug);
+  const project = org?.projects.find((p) => p.id === existing.paperclipProjectId);
+  const linearTeam = project?.linearTeam ?? (key.startsWith("OCD-") ? "OCD" : "CYB");
+  if (existing.linearIssueUuid && (deps.updateLinearIssueState || process.env.LINEAR_API_KEY?.trim())) {
+    try {
+      await (deps.updateLinearIssueState ?? updateLinearIssueStateLive)(
+        existing.linearIssueUuid,
+        "In Progress",
+        linearTeam,
+      );
+    } catch {
+      // Linear sync failure must not undo an already-recorded Paperclip claim
+    }
+  }
 
   const hash = computeIssueContentHash({
     linearIdentifier: key,
@@ -117,6 +201,9 @@ export async function runClaimOp(
     ...existing,
     fmTaskId: input.fmTaskId,
     worktree: input.worktree,
+    host,
+    surface,
+    ...(input.branch ? { branch: input.branch } : {}),
     ...(input.harness ? { harness: input.harness } : {}),
     lastPaperclipStatus: "in_progress",
     contentHash: hash,
@@ -135,7 +222,7 @@ export async function runReportPrOp(
 ): Promise<{ readonly entry: SyncLedgerEntry }> {
   const now = deps.now?.() ?? new Date().toISOString();
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
-  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? "/Users/adrianb/dev/firstmate";
+  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? defaultFmHome();
   const key = extractCanonicalIssueId(input.linearId);
   if (!key) throw new Error(`Invalid Linear issue identifier: ${input.linearId}`);
 
@@ -187,8 +274,10 @@ export async function runWatchEventsOp(
 }> {
   const nowFn = deps.now ?? (() => new Date().toISOString());
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
-  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? "/Users/adrianb/dev/firstmate";
-  const instanceMap = loadInstanceMap(deps.instanceMapPath ?? config.controlPlane.instanceMapPath);
+  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? defaultFmHome();
+  const instanceMap = loadInstanceMap(
+    deps.instanceMapPath ?? resolvePortableHomePath(config.controlPlane.instanceMapPath),
+  );
   const ledger = loadLedger({ ledgerPath: deps.ledgerPath, fmHome });
   const client = resolveDepsClient(deps, config);
 

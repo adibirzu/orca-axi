@@ -16,13 +16,24 @@
     "executionTarget": "adi0-firstmate",
     "allowedExecutionHosts": [
       "adi0",
-      "adi0-firstmate"
+      "adi0-firstmate",
+      "adi1",
+      "adi2",
+      "macmini",
+      "adrians-mac-mini",
+      "adrians-mini",
+      "omarchy",
+      "omarchy-adi0",
+      "adi0vm",
+      "commandopc",
+      "commandopc-wsl",
+      "adrians-macbook-pro"
     ],
     "forbiddenExecutionHosts": [
       "adi4",
       "adihost4",
-      "adi5",
-      "adrians-macbook-pro"
+      "srv2083966",
+      "adi5"
     ],
     "vpsLocalCodeExec": false,
     "mcpGovernance": {
@@ -85,11 +96,11 @@
           "agy",
           "opencode",
           "gemini",
-          "grok"
+          "grok",
+          "cursor",
+          "cline"
         ],
-        "blockedHarnesses": [
-          "cursor"
-        ],
+        "blockedHarnesses": [],
         "mcpGovernance": {
           "githubMergePr": false,
           "secretsRawExport": false
@@ -227,11 +238,11 @@
           "codex",
           "opencode",
           "grok",
-          "agy"
+          "agy",
+          "cursor",
+          "cline"
         ],
-        "blockedHarnesses": [
-          "cursor"
-        ],
+        "blockedHarnesses": [],
         "mcpGovernance": {
           "githubMergePr": false,
           "secretsRawExport": false
@@ -360,11 +371,11 @@
           "codex",
           "gemini",
           "opencode",
-          "agy"
+          "agy",
+          "cursor",
+          "cline"
         ],
-        "blockedHarnesses": [
-          "cursor"
-        ],
+        "blockedHarnesses": [],
         "mcpGovernance": {
           "githubMergePr": false,
           "secretsRawExport": false
@@ -478,11 +489,11 @@
           "codex",
           "opencode",
           "gemini",
-          "agy"
+          "agy",
+          "cursor",
+          "cline"
         ],
-        "blockedHarnesses": [
-          "cursor"
-        ],
+        "blockedHarnesses": [],
         "mcpGovernance": {
           "githubMergePr": false,
           "secretsRawExport": false
@@ -563,12 +574,14 @@
         "allowedHarnesses": [
           "grok",
           "codex",
-          "claude"
-        ],
-        "blockedHarnesses": [
+          "claude",
+          "opencode",
+          "gemini",
           "agy",
-          "cursor"
+          "cursor",
+          "cline"
         ],
+        "blockedHarnesses": [],
         "mcpGovernance": {
           "githubMergePr": false,
           "secretsRawExport": false
@@ -708,11 +721,11 @@
           "codex",
           "opencode",
           "gemini",
-          "agy"
+          "agy",
+          "cursor",
+          "cline"
         ],
-        "blockedHarnesses": [
-          "cursor"
-        ],
+        "blockedHarnesses": [],
         "mcpGovernance": {
           "githubMergePr": false,
           "secretsRawExport": false

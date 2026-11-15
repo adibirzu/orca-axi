@@ -261,6 +261,9 @@ export const SyncLedgerEntrySchema = z.object({
   fmTaskId: z.string().optional(),
   worktree: z.string().optional(),
   harness: z.string().optional(),
+  host: z.string().optional(),
+  surface: z.string().optional(),
+  branch: z.string().optional(),
   githubPrUrl: z.string().optional(),
   ciState: z.string().optional(),
   lastPaperclipStatus: PaperclipIssueStatusSchema,
@@ -340,6 +343,7 @@ export interface GuardDispatchDecision {
     | "FORBIDDEN_HARNESS"
     | "CUSTODY_FENCED"
     | "FORBIDDEN_MCP_ACTION"
+    | "ISSUE_ALREADY_CLAIMED"
     | "UNKNOWN_PROJECT";
   readonly reason: string;
   readonly orgSlug: string | null;

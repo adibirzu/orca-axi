@@ -5,11 +5,14 @@ import { fileURLToPath } from "node:url";
 
 import {
   type CustodySnapshot,
+  type GitHubPrRollup,
   type GuardDispatchDecision,
+  type PaperclipIssueStatus,
   type PaperclipOrgsConfig,
   PaperclipOrgsConfigSchema,
   type PaperclipOrgSpec,
   type PaperclipProjectSpec,
+  type SyncLedger,
 } from "./types.js";
 
 export interface LoadOrgsConfigOptions {
@@ -26,6 +29,7 @@ export interface EvaluateCustodyInput {
   readonly issueId?: string | null;
   readonly branchName?: string | null;
   readonly custody?: CustodySnapshot;
+  readonly host?: string | null;
 }
 
 export interface CustodyFenceVerdict {
@@ -42,6 +46,22 @@ export interface GuardDispatchRequest {
   readonly branchName?: string | null;
   readonly custody?: CustodySnapshot;
   readonly mcpAction?: "github.merge_pr" | "secrets.raw_export" | null;
+  readonly claimingTaskId?: string | null;
+  readonly ledger?: SyncLedger;
+  readonly openPrs?: readonly GitHubPrRollup[];
+  readonly liveIssueStatus?: PaperclipIssueStatus | null;
+}
+
+export function resolvePortableHomePath(rawPath: string, homeDir: string = homedir()): string {
+  const trimmed = rawPath.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith("~/")) {
+    return join(homeDir, trimmed.slice(2));
+  }
+  if (trimmed.startsWith("/Users/adrianb/") && !existsSync(trimmed)) {
+    return join(homeDir, trimmed.slice("/Users/adrianb/".length));
+  }
+  return trimmed;
 }
 
 function resolveBundledConfigPath(): string {
@@ -143,6 +163,10 @@ export function evaluateCustodyFence(
 ): CustodyFenceVerdict {
   const fences = config.globalGovernance.custodyFences;
   const hostOwner = input.custody?.reviewforgeHost ?? fences.reviewforgeHost;
+  const callerHost = input.host ? normalizeToken(input.host).replace(/\.local$/, "") : "";
+  if (callerHost && callerHost === normalizeToken(hostOwner).replace(/\.local$/, "")) {
+    return { fenced: false, fencedBy: null, reason: null };
+  }
   const branch = input.branchName?.trim() ?? "";
 
   if (branch) {
@@ -206,6 +230,42 @@ function isAllowedExecutionHost(config: PaperclipOrgsConfig, rawHost: string): b
   return allowed.has(normalized);
 }
 
+function findExistingIssueClaimReason(request: GuardDispatchRequest): string | null {
+  const issueId = extractCanonicalIssueId(request.issueId);
+  if (!issueId) return null;
+
+  const claimingTaskId = request.claimingTaskId?.trim() || null;
+  const ledgerEntry = request.ledger?.entries[issueId];
+  if (
+    ledgerEntry &&
+    (ledgerEntry.lastPaperclipStatus === "in_progress" || ledgerEntry.lastPaperclipStatus === "in_review")
+  ) {
+    const ownedByCaller = Boolean(claimingTaskId && ledgerEntry.fmTaskId === claimingTaskId);
+    if (!ownedByCaller) {
+      return `Issue ${issueId} is already ${ledgerEntry.lastPaperclipStatus} in sync ledger (task=${ledgerEntry.fmTaskId ?? "unknown"}, host=${ledgerEntry.host ?? "unknown"})`;
+    }
+  }
+
+  const openPr = request.openPrs?.find(
+    (pr) =>
+      pr.state === "OPEN" &&
+      pr.linearIdentifiers.some((id) => extractCanonicalIssueId(id) === issueId) &&
+      (!request.branchName || pr.headRefName !== request.branchName),
+  );
+  if (openPr) {
+    return `Issue ${issueId} already has open PR #${openPr.number} (${openPr.url})`;
+  }
+
+  if (request.liveIssueStatus === "in_progress" || request.liveIssueStatus === "in_review") {
+    const ownedByCaller = Boolean(claimingTaskId && ledgerEntry?.fmTaskId === claimingTaskId);
+    if (!ownedByCaller) {
+      return `Issue ${issueId} is already ${request.liveIssueStatus} in Paperclip`;
+    }
+  }
+
+  return null;
+}
+
 export function guardDispatch(
   config: PaperclipOrgsConfig,
   request: GuardDispatchRequest,
@@ -267,6 +327,7 @@ export function guardDispatch(
     issueId: request.issueId,
     branchName: request.branchName,
     custody: request.custody,
+    host,
   });
   if (fence.fenced) {
     return {
@@ -314,6 +375,23 @@ export function guardDispatch(
       allowed: false,
       code: "FORBIDDEN_HARNESS",
       reason: `Harness '${harness}' is blocked on ${resolved.project.slug} (${resolved.org.slug}); allowed: ${Array.from(allowedSet).join(", ")}`,
+      orgSlug: resolved.org.slug,
+      projectId: resolved.project.id,
+      projectSlug: resolved.project.slug,
+      executionTarget: resolved.org.governance.executionTarget,
+      host,
+      harness,
+      mcpGovernance,
+      fencedBy: null,
+    };
+  }
+
+  const existingClaimReason = findExistingIssueClaimReason(request);
+  if (existingClaimReason) {
+    return {
+      allowed: false,
+      code: "ISSUE_ALREADY_CLAIMED",
+      reason: existingClaimReason,
       orgSlug: resolved.org.slug,
       projectId: resolved.project.id,
       projectSlug: resolved.project.slug,

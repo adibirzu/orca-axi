@@ -17,8 +17,8 @@ Usage:
   paperclip-cyb orgs bootstrap [--dry-run|--apply] [--json]
   paperclip-cyb daily-ops [--dry-run|--apply] [--json]
   paperclip-cyb sync [--project <slug>] [--initiative <I-3..I-8>] [--limit <n>] [--dry-run|--apply] [--json]
-  paperclip-cyb guard-dispatch --project <slug> --host <host> --harness <harness> [--issue <id>] [--branch <ref>] [--mcp-action <act>] [--json]
-  paperclip-cyb claim <linear-id> --fm-task <id> --worktree <path> [--harness <h>] [--json]
+  paperclip-cyb guard-dispatch --project <slug> --host <host> --harness <harness> [--issue <id>] [--branch <ref>] [--fm-task <id>] [--mcp-action <act>] [--json]
+  paperclip-cyb claim <linear-id> --fm-task <id> --worktree <path> [--harness <h>] [--host <host>] [--surface <surface>] [--branch <ref>] [--force] [--json]
   paperclip-cyb report-pr <linear-id> --pr <url> [--ci <state>] [--json]
   paperclip-cyb watch-events [--once|--timeout-sec <n>] [--json]
 `;
@@ -59,6 +59,7 @@ function parseArgv(argv: readonly string[]): ParsedArgs {
             "mcp-action",
             "fm-task",
             "worktree",
+            "surface",
             "pr",
             "ci",
             "timeout-sec",
@@ -193,6 +194,7 @@ export async function runPaperclipCybCli(
         harness,
         issueId: stringFlag(parsed.flags, "issue"),
         branchName: stringFlag(parsed.flags, "branch"),
+        claimingTaskId: stringFlag(parsed.flags, "fm-task"),
         mcpAction,
       });
       emitEnvelope(
@@ -220,6 +222,10 @@ export async function runPaperclipCybCli(
         fmTaskId,
         worktree,
         harness: stringFlag(parsed.flags, "harness") ?? undefined,
+        host: stringFlag(parsed.flags, "host") ?? undefined,
+        surface: stringFlag(parsed.flags, "surface") ?? undefined,
+        branch: stringFlag(parsed.flags, "branch") ?? undefined,
+        force: Boolean(parsed.flags.force),
       });
       emitEnvelope(
         writeOut,

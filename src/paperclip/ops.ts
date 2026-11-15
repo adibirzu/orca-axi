@@ -1,7 +1,10 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import { loadBoardAuthConfig } from "./client.js";
 import { loadLedger, resolveLedgerPath, saveLedgerAtomic, upsertLedgerEntry } from "./ledger.js";
 import { type PaperclipCliDeps, resolveDepsClient } from "./ops-workflow.js";
-import { loadPaperclipOrgsConfig, resolvePaperclipOrgsPath } from "./policy.js";
+import { loadPaperclipOrgsConfig, resolvePaperclipOrgsPath, resolvePortableHomePath } from "./policy.js";
 import { reconcileFourWay } from "./reconciler.js";
 import {
   fetchGitHubPrsLive,
@@ -53,11 +56,13 @@ export async function runDoctorOp(deps: PaperclipCliDeps): Promise<Record<string
   const configPath = resolvePaperclipOrgsPath({ configPath: deps.configPath });
   const config = loadPaperclipOrgsConfig({ configPath });
   const auth = loadBoardAuthConfig({
-    boardEnvPath: deps.boardEnvPath ?? config.controlPlane.boardEnvPath,
+    boardEnvPath: deps.boardEnvPath ?? resolvePortableHomePath(config.controlPlane.boardEnvPath),
   });
   const ledgerPath = resolveLedgerPath({ ledgerPath: deps.ledgerPath, fmHome: deps.fmHome });
   const ledger = loadLedger({ ledgerPath, fmHome: deps.fmHome });
-  const instanceMap = loadInstanceMap(deps.instanceMapPath ?? config.controlPlane.instanceMapPath);
+  const instanceMap = loadInstanceMap(
+    deps.instanceMapPath ?? resolvePortableHomePath(config.controlPlane.instanceMapPath),
+  );
   const client = resolveDepsClient(deps, config);
 
   let apiHealth: Record<string, unknown>;
@@ -107,7 +112,7 @@ export async function runOrgsBootstrapOp(
 ): Promise<Record<string, unknown>> {
   const now = deps.now?.() ?? new Date().toISOString();
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
-  const mapPath = deps.instanceMapPath ?? config.controlPlane.instanceMapPath;
+  const mapPath = deps.instanceMapPath ?? resolvePortableHomePath(config.controlPlane.instanceMapPath);
   const existingMap = loadInstanceMap(mapPath);
   const client = resolveDepsClient(deps, config);
   const companies = await client.listCompanies();
@@ -228,8 +233,10 @@ export async function runSyncOp(
 > {
   const now = deps.now?.() ?? new Date().toISOString();
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
-  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? "/Users/adrianb/dev/firstmate";
-  const instanceMap = loadInstanceMap(deps.instanceMapPath ?? config.controlPlane.instanceMapPath);
+  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? join(homedir(), "dev", "firstmate");
+  const instanceMap = loadInstanceMap(
+    deps.instanceMapPath ?? resolvePortableHomePath(config.controlPlane.instanceMapPath),
+  );
   const ledger = loadLedger({ ledgerPath: deps.ledgerPath, fmHome });
   const client = resolveDepsClient(deps, config);
 
