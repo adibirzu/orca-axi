@@ -43,6 +43,11 @@ reported `status` (`ok` | `refused` | `error`), not the exit code.
 
 Default stdout is TOON; `--json` is the machine escape hatch.
 
+Paperclip sync ledger paths require an explicit binding: `ledgerPath`,
+`PAPERCLIP_SYNC_LEDGER`, `fmHome`, or `FM_HOME`.
+Operations that discover Firstmate tasks also require `fmHome` or `FM_HOME`.
+Missing or blank bindings refuse rather than guessing a machine home.
+
 ## Exit codes
 
 ```

@@ -3,6 +3,7 @@ import type { DailyOpsClientPort } from "./daily-ops.js";
 import {
   computeIssueContentHash,
   loadLedger,
+  resolveLedgerPath,
   saveLedgerAtomic,
   updateLedgerCursor,
   upsertLedgerEntry,
@@ -82,12 +83,12 @@ export async function runClaimOp(
   },
 ): Promise<{ readonly entry: SyncLedgerEntry }> {
   const now = deps.now?.() ?? new Date().toISOString();
-  const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
-  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? "/Users/adrianb/dev/firstmate";
+  const ledgerOpts = { ledgerPath: deps.ledgerPath, fmHome: deps.fmHome };
+  resolveLedgerPath(ledgerOpts);
   const key = extractCanonicalIssueId(input.linearId);
   if (!key) throw new Error(`Invalid Linear issue identifier: ${input.linearId}`);
 
-  const ledger = loadLedger({ ledgerPath: deps.ledgerPath, fmHome });
+  const ledger = loadLedger(ledgerOpts);
   const existing = ledger.entries[key];
   if (!existing) {
     throw new Error(
@@ -95,11 +96,12 @@ export async function runClaimOp(
     );
   }
 
+  const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
   const client = resolveDepsClient(deps, config);
   await client.updateIssue(existing.paperclipIssueId, { status: "in_progress" });
   await client.addIssueComment(
     existing.paperclipIssueId,
-    `Claimed on adi0 by FirstMate task \`${input.fmTaskId}\` (worktree: \`${input.worktree}\`${input.harness ? `, harness: \`${input.harness}\`` : ""})`,
+    `Claimed by FirstMate task \`${input.fmTaskId}\` (worktree: \`${input.worktree}\`${input.harness ? `, harness: \`${input.harness}\`` : ""})`,
   );
 
   const hash = computeIssueContentHash({
@@ -122,10 +124,7 @@ export async function runClaimOp(
     contentHash: hash,
     updatedAt: now,
   };
-  saveLedgerAtomic(upsertLedgerEntry(ledger, nextEntry, now), {
-    ledgerPath: deps.ledgerPath,
-    fmHome,
-  });
+  saveLedgerAtomic(upsertLedgerEntry(ledger, nextEntry, now), ledgerOpts);
   return { entry: nextEntry };
 }
 
@@ -134,16 +133,17 @@ export async function runReportPrOp(
   input: { readonly linearId: string; readonly prUrl: string; readonly ciState?: string },
 ): Promise<{ readonly entry: SyncLedgerEntry }> {
   const now = deps.now?.() ?? new Date().toISOString();
-  const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
-  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? "/Users/adrianb/dev/firstmate";
+  const ledgerOpts = { ledgerPath: deps.ledgerPath, fmHome: deps.fmHome };
+  resolveLedgerPath(ledgerOpts);
   const key = extractCanonicalIssueId(input.linearId);
   if (!key) throw new Error(`Invalid Linear issue identifier: ${input.linearId}`);
 
-  const ledger = loadLedger({ ledgerPath: deps.ledgerPath, fmHome });
+  const ledger = loadLedger(ledgerOpts);
   const existing = ledger.entries[key];
   if (!existing) throw new Error(`Issue ${key} not found in Paperclip sync ledger`);
 
   const ci = (input.ciState ?? "UNKNOWN").toUpperCase();
+  const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
   const client = resolveDepsClient(deps, config);
   await client.updateIssue(existing.paperclipIssueId, { status: "in_review" });
   await client.addIssueComment(
@@ -170,10 +170,7 @@ export async function runReportPrOp(
     contentHash: hash,
     updatedAt: now,
   };
-  saveLedgerAtomic(upsertLedgerEntry(ledger, nextEntry, now), {
-    ledgerPath: deps.ledgerPath,
-    fmHome,
-  });
+  saveLedgerAtomic(upsertLedgerEntry(ledger, nextEntry, now), ledgerOpts);
   return { entry: nextEntry };
 }
 
@@ -186,10 +183,11 @@ export async function runWatchEventsOp(
   readonly events: readonly PaperclipActivity[];
 }> {
   const nowFn = deps.now ?? (() => new Date().toISOString());
+  const ledgerOpts = { ledgerPath: deps.ledgerPath, fmHome: deps.fmHome };
+  resolveLedgerPath(ledgerOpts);
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
-  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? "/Users/adrianb/dev/firstmate";
   const instanceMap = loadInstanceMap(deps.instanceMapPath ?? config.controlPlane.instanceMapPath);
-  const ledger = loadLedger({ ledgerPath: deps.ledgerPath, fmHome });
+  const ledger = loadLedger(ledgerOpts);
   const client = resolveDepsClient(deps, config);
 
   const deadline = Date.now() + Math.max(1, options.timeoutSec) * 1000;
@@ -212,10 +210,7 @@ export async function runWatchEventsOp(
     if (fresh.length > 0) {
       const sorted = [...fresh].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       const latestCursor = sorted[sorted.length - 1]!.createdAt;
-      saveLedgerAtomic(updateLedgerCursor(ledger, latestCursor, nowFn()), {
-        ledgerPath: deps.ledgerPath,
-        fmHome,
-      });
+      saveLedgerAtomic(updateLedgerCursor(ledger, latestCursor, nowFn()), ledgerOpts);
       return { wake: true, cursor: latestCursor, events: sorted };
     }
 
