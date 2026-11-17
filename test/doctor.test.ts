@@ -67,9 +67,9 @@ describe("doctor", () => {
 
   it("emits the same report as JSON with --json", async () => {
     const output = await doctorCommand(["--json"], { resolve: refused });
-    const parsed = JSON.parse(output) as { status: string; reason: string };
-    expect(parsed.status).toBe("refused");
-    expect(parsed.reason).toContain("screen reader");
+    const parsed = JSON.parse(output) as { doctor: { status: string; reason: string } };
+    expect(parsed.doctor.status).toBe("refused");
+    expect(parsed.doctor.reason).toContain("screen reader");
   });
 
   it("hides candidate detail by default and shows it with --full", async () => {
