@@ -10,8 +10,9 @@ description: >
 
 Resolve the Orca runtime binary and discover working coding agents across your fleet. Version 0.1.0.
 
-Status: **Live fleet, agent radar & portfolio catalog.** `fleet` (the no-arg dashboard),
-`agents` / `projects`, `portfolio`, and `doctor` are live. `update`/`update --check`
+Status: **Live fleet, agent radar, portfolio catalog & OB-4 mirror.** `fleet` (the no-arg dashboard),
+`agents` / `projects`, `portfolio`, `doctor`, and `mirror` (read-only Firstmate
+fleet projection into Orca UI cards) are live. `update`/`update --check`
 are built in via axi-sdk-js.
 
 Run it without a global install:
@@ -52,15 +53,16 @@ npx -y orca-axi portfolio             # inspect repository & domain catalog
 npx -y orca-axi doctor                # binary diagnosis
 npx -y orca-axi doctor --full         # every candidate path tried
 npx -y orca-axi doctor --json
+npx -y orca-axi mirror --from snapshot.json   # read-only fleet cards
 npx -y orca-axi update --check        # current vs latest, no install
 ```
 
 Top-level surface:
 
 ```
-usage: orca-axi [fleet|agents|projects|portfolio|doctor] [flags]
-commands[5]:
-  (none)=fleet, agents, projects, portfolio, doctor
+usage: orca-axi [fleet|agents|projects|portfolio|doctor|mirror] [flags]
+commands[6]:
+  (none)=fleet, agents, projects, portfolio, doctor, mirror
 output:
   Default TOON shows the smallest schema that lets the agent decide next.
   --full adds every candidate path, broken symlink, and session signal.
@@ -74,6 +76,8 @@ notes:
   agents discovers live coding agents (claude, codex, agy, grok, opencode,
   cursor, gemini, cline, hermes) across local and SSH fleet machines.
   portfolio inspects ~/.config/orca-axi/portfolio-catalog.json across domains & tiers.
+  mirror projects Firstmate fleet state into read-only Orca UI cards;
+  it never mutates Firstmate or Orca state (see orca-axi mirror --help).
 flags[5]:
   --json, --full, --all-machines, --help, -v/--version
 examples:
@@ -82,6 +86,7 @@ examples:
   orca-axi projects --all-machines --by-domain
   orca-axi portfolio --domain 01 --tier 1
   orca-axi doctor --full
+  orca-axi mirror --from snapshot.json
   orca-axi update --check
 ```
 
@@ -180,6 +185,35 @@ examples:
   orca-axi doctor
   orca-axi doctor --full
   orca-axi doctor --json
+```
+
+`mirror` contract (read-only projection, not a control plane; Orca-runtime
+rendering is verified separately on the Mac where the desktop UI runs):
+
+```
+usage: orca-axi mirror [--from <path>] [--json] [--full]
+description:
+  Project Firstmate fleet state (task states, in-flight work, PR links)
+  into Orca UI cards as a read-only view. Source is the documented
+  Firstmate snapshot interface, never Firstmate tracked code: --from
+  reads a captured fm-fleet-snapshot.sh --json file, otherwise the
+  snapshot CLI ($FM_FLEET_SNAPSHOT_BIN or fm-fleet-snapshot.sh on PATH)
+  is run with the read-only --json flag. Each card carries its Orca
+  placement (project/host/environment per orca-ide --help) as a render
+  hint. This is a projection, not a control plane: cards are readOnly
+  with no controls, nothing here mutates Firstmate state, and nothing
+  here invokes an Orca mutating command. Orca-runtime rendering is
+  verified separately on the Mac where the desktop UI runs.
+outputs:
+  TOON view: source, summary{total,inFlight,queued,done}, cards[]
+  --full  adds per-card detail{kind,since,links,blockedBy,holds}
+  --json  the same view as JSON (cards also pass the Orca sink shape)
+flags[4]:
+  --from,   --json,   --full, --help
+examples:
+  orca-axi mirror --from snapshot.json
+  orca-axi mirror --from snapshot.json --json
+  orca-axi mirror --from snapshot.json --full
 ```
 
 ## Exit codes

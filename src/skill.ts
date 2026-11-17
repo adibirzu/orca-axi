@@ -2,6 +2,7 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 import { AGENTS_HELP } from "./commands/agents.js";
 import { DOCTOR_HELP } from "./commands/doctor.js";
 import { FLEET_HELP } from "./commands/fleet.js";
+import { MIRROR_HELP } from "./commands/mirror.js";
 import { PORTFOLIO_HELP } from "./commands/portfolio.js";
 import { VERSION } from "./version.js";
 
@@ -23,8 +24,9 @@ description: >
 
 ${DESCRIPTION} Version ${VERSION}.
 
-Status: **Live fleet, agent radar & portfolio catalog.** \`fleet\` (the no-arg dashboard),
-\`agents\` / \`projects\`, \`portfolio\`, and \`doctor\` are live. \`update\`/\`update --check\`
+Status: **Live fleet, agent radar, portfolio catalog & OB-4 mirror.** \`fleet\` (the no-arg dashboard),
+\`agents\` / \`projects\`, \`portfolio\`, \`doctor\`, and \`mirror\` (read-only Firstmate
+fleet projection into Orca UI cards) are live. \`update\`/\`update --check\`
 are built in via axi-sdk-js.
 
 Run it without a global install:
@@ -65,6 +67,7 @@ npx -y orca-axi portfolio             # inspect repository & domain catalog
 npx -y orca-axi doctor                # binary diagnosis
 npx -y orca-axi doctor --full         # every candidate path tried
 npx -y orca-axi doctor --json
+npx -y orca-axi mirror --from snapshot.json   # read-only fleet cards
 npx -y orca-axi update --check        # current vs latest, no install
 \`\`\`
 
@@ -92,6 +95,12 @@ ${PORTFOLIO_HELP}\`\`\`
 
 \`\`\`
 ${DOCTOR_HELP}\`\`\`
+
+\`mirror\` contract (read-only projection, not a control plane; Orca-runtime
+rendering is verified separately on the Mac where the desktop UI runs):
+
+\`\`\`
+${MIRROR_HELP}\`\`\`
 
 ## Exit codes
 

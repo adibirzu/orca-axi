@@ -1,6 +1,7 @@
 # orca-axi
 
 - Sharp edge: `orca` is also the GNOME screen reader on Linux desktops. Never invoke a resolved binary for anything beyond the `--version` identity probe in `src/orca-resolve.ts`; the guard refusals there are load-bearing. See `README.md` for the doctrine.
+- `mirror` (`src/mirror.ts` pure projection + `src/commands/mirror.ts` source loading) is read-only by design: source is `fm-fleet-snapshot.sh --json` or `--from <file>`, cards carry `readOnly` with empty `controls`, and no Orca mutating command is ever invoked. Orca-UI rendering verifies only on the Mac.
 
 Before changing binary resolution, read the [resolver](src/orca-resolve.ts) and [identity regressions](test/resolve.test.ts). [package.json](package.json) owns build, test and lint commands. Regenerate [the skill](skills/orca-axi/SKILL.md) from its [source](src/skill.ts); [the parity test](test/skill.test.ts) rejects stale generated guidance.
 
