@@ -1,6 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeSync, mkdirSync, chmodSync, closeSync, fsyncSync, openSync, renameSync, unlinkSync } from "node:fs";
-import { homedir } from "node:os";
+import { readFileSync, writeSync, mkdirSync, chmodSync, closeSync, fsyncSync, openSync, renameSync, unlinkSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 import {
@@ -27,22 +26,37 @@ export interface ContentHashInput {
   readonly fencedBy: string | null;
 }
 
-function resolveDefaultFmHome(): string {
-  const home = homedir();
-  const candidates = [join(home, "dev", "firstmate"), join(home, "GitHub", "firstmate"), join(home, "firstmate")];
-  return candidates.find((cand) => existsSync(cand)) ?? candidates[0]!;
+const LEDGER_BINDING_HINT =
+  "set options.ledgerPath, PAPERCLIP_SYNC_LEDGER, options.fmHome, or FM_HOME";
+const FM_HOME_BINDING_HINT = "set options.fmHome or FM_HOME";
+
+export function resolveFmHome(options: LedgerPathOptions = {}): string {
+  const env = options.env ?? process.env;
+  const fmHome = options.fmHome?.trim() || env.FM_HOME?.trim();
+  if (!fmHome) {
+    throw new Error(
+      `FirstMate home binding required for task discovery; ${FM_HOME_BINDING_HINT}`,
+    );
+  }
+  return resolve(fmHome);
 }
 
 export function resolveLedgerPath(options: LedgerPathOptions = {}): string {
-  if (options.ledgerPath) {
-    return resolve(options.ledgerPath);
+  const ledgerPath = options.ledgerPath?.trim();
+  if (ledgerPath) {
+    return resolve(ledgerPath);
   }
   const env = options.env ?? process.env;
   const explicit = env.PAPERCLIP_SYNC_LEDGER?.trim();
   if (explicit) {
     return resolve(explicit);
   }
-  const fmHome = options.fmHome?.trim() || env.FM_HOME?.trim() || resolveDefaultFmHome();
+  const fmHome = options.fmHome?.trim() || env.FM_HOME?.trim();
+  if (!fmHome) {
+    throw new Error(
+      `Paperclip sync ledger binding required; ${LEDGER_BINDING_HINT}`,
+    );
+  }
   return join(resolve(fmHome), "state", "paperclip-sync", "ledger.json");
 }
 

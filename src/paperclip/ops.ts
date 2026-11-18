@@ -1,8 +1,11 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 import { loadBoardAuthConfig } from "./client.js";
-import { loadLedger, resolveLedgerPath, saveLedgerAtomic, upsertLedgerEntry } from "./ledger.js";
+import {
+  loadLedger,
+  resolveFmHome,
+  resolveLedgerPath,
+  saveLedgerAtomic,
+  upsertLedgerEntry,
+} from "./ledger.js";
 import { type PaperclipCliDeps, resolveDepsClient } from "./ops-workflow.js";
 import { loadPaperclipOrgsConfig, resolvePaperclipOrgsPath, resolvePortableHomePath } from "./policy.js";
 import { reconcileFourWay } from "./reconciler.js";
@@ -232,12 +235,13 @@ export async function runSyncOp(
   }
 > {
   const now = deps.now?.() ?? new Date().toISOString();
+  const fmHome = resolveFmHome({ fmHome: deps.fmHome });
+  resolveLedgerPath({ ledgerPath: deps.ledgerPath, fmHome: deps.fmHome });
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
-  const fmHome = deps.fmHome ?? process.env.FM_HOME ?? join(homedir(), "dev", "firstmate");
   const instanceMap = loadInstanceMap(
     deps.instanceMapPath ?? resolvePortableHomePath(config.controlPlane.instanceMapPath),
   );
-  const ledger = loadLedger({ ledgerPath: deps.ledgerPath, fmHome });
+  const ledger = loadLedger({ ledgerPath: deps.ledgerPath, fmHome: deps.fmHome });
   const client = resolveDepsClient(deps, config);
 
   const [linearIssues, githubPrs, custody] = await Promise.all([
@@ -326,6 +330,6 @@ export async function runSyncOp(
     }
   }
 
-  saveLedgerAtomic(nextLedger, { ledgerPath: deps.ledgerPath, fmHome });
+  saveLedgerAtomic(nextLedger, { ledgerPath: deps.ledgerPath, fmHome: deps.fmHome });
   return { ...plan, orgs: orgsSummary, mode: "apply", appliedCount };
 }
