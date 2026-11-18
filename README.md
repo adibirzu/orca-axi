@@ -53,10 +53,11 @@ reported `status` (`ok` | `refused` | `error`), not the exit code.
 
 Default stdout is TOON; `--json` is the machine escape hatch.
 
-Paperclip sync ledger paths require an explicit binding: `ledgerPath`,
-`PAPERCLIP_SYNC_LEDGER`, `fmHome`, or `FM_HOME`.
-Operations that discover Firstmate tasks also require `fmHome` or `FM_HOME`.
-Missing or blank bindings refuse rather than guessing a machine home.
+Paperclip resolves the sync ledger path from `options.ledgerPath`,
+`PAPERCLIP_SYNC_LEDGER`, `options.fmHome`, then `FM_HOME`, in that order. It
+trims each value. `paperclip-cyb sync` also requires `options.fmHome` or
+`FM_HOME` to discover FirstMate tasks. If a required binding is missing or
+blank, the command stops without guessing a machine home.
 
 ## Exit codes
 
