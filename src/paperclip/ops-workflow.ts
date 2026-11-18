@@ -83,7 +83,9 @@ export async function runGuardDispatchOp(
   deps: PaperclipCliDeps,
   req: Omit<GuardDispatchRequest, "custody">,
 ): Promise<GuardDispatchDecision> {
-  const ledger = req.ledger ?? loadLedger({ ledgerPath: deps.ledgerPath, fmHome: deps.fmHome });
+  const ledgerOpts = { ledgerPath: deps.ledgerPath, fmHome: deps.fmHome };
+  resolveLedgerPath(ledgerOpts);
+  const ledger = req.ledger ?? loadLedger(ledgerOpts);
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
   const custody = await (deps.loadCustodySnapshot ?? loadCustodySnapshotLive)(config);
 
