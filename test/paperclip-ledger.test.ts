@@ -340,6 +340,15 @@ describe("paperclip atomic sync ledger", () => {
           issueId: "CYB-1",
         }),
       ).rejects.toThrow(/Paperclip sync ledger binding required/);
+      await expect(
+        runGuardDispatchOp(deps, {
+          project: "orca-axi",
+          host: "adi1",
+          harness: "codex",
+          issueId: "CYB-1",
+          ledger: createEmptyLedger("2026-11-12T08:00:00Z"),
+        }),
+      ).rejects.toThrow(/Paperclip sync ledger binding required/);
     } finally {
       if (previousFmHome === undefined) delete process.env.FM_HOME;
       else process.env.FM_HOME = previousFmHome;
