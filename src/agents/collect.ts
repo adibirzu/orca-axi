@@ -29,6 +29,7 @@ export const DEFAULT_REMOTE_FLEET: readonly RemoteHostSpec[] = [
   { host: "adi1", sshTargets: ["adi1"] },
   { host: "adi2", sshTargets: ["adi2-ts", "adi2"] },
   { host: "macmini", sshTargets: ["macmini"] },
+  { host: "m4", sshTargets: ["m4", "adrianbmacm4"] },
   { host: "omarchy", sshTargets: ["omarchy"] },
   { host: "commandopc-wsl", sshTargets: ["commandopc-wsl"] },
   { host: "adi4", sshTargets: ["adihost4", "adi4"] },
@@ -51,6 +52,7 @@ export function normalizeLocalHostName(raw: string = osHostname()): string {
   if (short === "adi0vm" || short === "omarchy") return "omarchy";
   if (short === "commandopc" || short === "commandopc-wsl") return "commandopc-wsl";
   if (short.includes("mini")) return "macmini";
+  if (short === "m4" || short === "adrianbmacm4" || short.includes("macm4")) return "m4";
   if (short === "srv2083966" || short === "adihost4" || short === "adi4") return "adi4";
   if (short === "edgexpert-33b0" || short === "adi2") return "adi2";
   return short || "local";
