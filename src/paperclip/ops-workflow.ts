@@ -162,7 +162,7 @@ export async function runClaimOp(
   const surface = input.surface?.trim() || (process.platform === "darwin" ? "orca" : "herdr");
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
   const client = resolveDepsClient(deps, config);
-  await client.updateIssue(existing.paperclipIssueId, { status: "in_progress" });
+  const claimedIssue = await client.updateIssue(existing.paperclipIssueId, { status: "in_progress" });
   await client.addIssueComment(
     existing.paperclipIssueId,
     `Claimed on ${host} (${surface}) by FirstMate task \`${input.fmTaskId}\` (worktree: \`${input.worktree}\`${input.branch ? `, branch: \`${input.branch}\`` : ""}${input.harness ? `, harness: \`${input.harness}\`` : ""})`,
@@ -186,9 +186,9 @@ export async function runClaimOp(
 
   const hash = computeIssueContentHash({
     linearIdentifier: key,
-    title: `[${key}]`,
+    title: claimedIssue.title,
     targetStatus: "in_progress",
-    priority: "high",
+    priority: claimedIssue.priority,
     githubPrUrl: existing.githubPrUrl ?? null,
     ciState: existing.ciState ?? null,
     fmTaskId: input.fmTaskId,
@@ -228,7 +228,7 @@ export async function runReportPrOp(
   const ci = (input.ciState ?? "UNKNOWN").toUpperCase();
   const config = loadPaperclipOrgsConfig({ configPath: deps.configPath });
   const client = resolveDepsClient(deps, config);
-  await client.updateIssue(existing.paperclipIssueId, { status: "in_review" });
+  const reportedIssue = await client.updateIssue(existing.paperclipIssueId, { status: "in_review" });
   await client.addIssueComment(
     existing.paperclipIssueId,
     `Pull request ready for review: ${input.prUrl} (CI: ${ci}). Note: auto-merge is disabled by governance.`,
@@ -236,9 +236,9 @@ export async function runReportPrOp(
 
   const hash = computeIssueContentHash({
     linearIdentifier: key,
-    title: `[${key}]`,
+    title: reportedIssue.title,
     targetStatus: "in_review",
-    priority: "high",
+    priority: reportedIssue.priority,
     githubPrUrl: input.prUrl,
     ciState: ci,
     fmTaskId: existing.fmTaskId ?? null,
