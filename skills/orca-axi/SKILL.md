@@ -10,9 +10,10 @@ description: >
 
 Resolve the Orca runtime binary and discover working coding agents across your fleet. Version 0.1.0.
 
-Status: **Live fleet, agent radar, portfolio catalog & OB-4 mirror.** `fleet` (the no-arg dashboard),
-`agents` / `projects`, `portfolio`, `doctor`, and `mirror` (read-only Firstmate
-fleet projection into Orca UI cards) are live. `update`/`update --check`
+Status: **Live fleet, agent radar, portfolio catalog, OB-4 mirror & hooks audit.** `fleet` (the no-arg dashboard),
+`agents` / `projects`, `portfolio`, `doctor`, `mirror` (read-only Firstmate
+fleet projection into Orca UI cards), and `hooks-audit` (read-only worktree
+hook drift inspection) are live. `update`/`update --check`
 are built in via axi-sdk-js.
 
 Run it without a global install:
@@ -54,15 +55,16 @@ npx -y orca-axi doctor                # binary diagnosis
 npx -y orca-axi doctor --full         # every candidate path tried
 npx -y orca-axi doctor --json
 npx -y orca-axi mirror --from snapshot.json   # read-only fleet cards
+npx -y orca-axi hooks-audit --json            # read-only worktree hook drift audit
 npx -y orca-axi update --check        # current vs latest, no install
 ```
 
 Top-level surface:
 
 ```
-usage: orca-axi [fleet|agents|projects|portfolio|doctor|mirror] [flags]
-commands[6]:
-  (none)=fleet, agents, projects, portfolio, doctor, mirror
+usage: orca-axi [fleet|agents|projects|portfolio|doctor|mirror|hooks-audit] [flags]
+commands[7]:
+  (none)=fleet, agents, projects, portfolio, doctor, mirror, hooks-audit
 output:
   Default TOON shows the smallest schema that lets the agent decide next.
   --full adds every candidate path, broken symlink, and session signal.
@@ -78,6 +80,8 @@ notes:
   portfolio inspects ~/.config/orca-axi/portfolio-catalog.json across domains & tiers.
   mirror projects Firstmate fleet state into read-only Orca UI cards;
   it never mutates Firstmate or Orca state (see orca-axi mirror --help).
+  hooks-audit performs a strictly read-only audit of orca.yaml,
+  scripts/orca-worktree-*.sh, and commandSourcePolicy drift across repos.
 flags[5]:
   --json, --full, --all-machines, --help, -v/--version
 examples:
@@ -87,6 +91,7 @@ examples:
   orca-axi portfolio --domain 01 --tier 1
   orca-axi doctor --full
   orca-axi mirror --from snapshot.json
+  orca-axi hooks-audit --json
   orca-axi update --check
 ```
 
@@ -214,6 +219,38 @@ examples:
   orca-axi mirror --from snapshot.json
   orca-axi mirror --from snapshot.json --json
   orca-axi mirror --from snapshot.json --full
+```
+
+`hooks-audit` contract (strictly read-only worktree hook & policy audit):
+
+```
+usage: orca-axi hooks-audit [--repo <path>] [--all] [--json]
+description:
+  Strictly read-only audit of Orca worktree hook configuration across
+  registered Orca repos (and portfolio repos with --all, or one repo
+  with --repo <path>). Resolves the Orca binary first (preserving the
+  GNOME screen-reader guard), queries `orca repo list --json`, and
+  safely inspects on-disk orca.yaml and scripts/orca-worktree-*.sh using
+  O_NOFOLLOW reads without ever mutating repo files or Orca settings.
+findings:
+  missing_orca_yaml     checked-in orca.yaml is absent
+  local_only_override   Orca commandSourcePolicy is local-only (bypasses orca.yaml)
+  missing_archive_hook  archive hook missing in orca.yaml or script missing on disk
+  unsafe_shared_dirs    sharedDirectories includes .venv, node_modules, .next, target, or caches
+  missing_setup_script  orca.yaml references a setup script that does not exist on disk
+  unsafe_symlink        hook file or scripts/ is a symlink, special file, or escapes repo root
+  invalid_orca_yaml     orca.yaml could not be parsed as a valid YAML mapping
+  missing_repo_dir      registered/catalog repo directory does not exist on disk
+outputs:
+  TOON summary: status, scope, summary{}, repos[]
+  --json  machine-readable {hooksAudit: ...} envelope
+flags[4]:
+  --repo <path>,   --all,   --json, --help
+examples:
+  orca-axi hooks-audit
+  orca-axi hooks-audit --json
+  orca-axi hooks-audit --all --json
+  orca-axi hooks-audit --repo ~/dev/orca-axi
 ```
 
 ## Exit codes

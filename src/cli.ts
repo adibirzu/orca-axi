@@ -3,6 +3,7 @@ import { runAxiCli } from "axi-sdk-js";
 import { agentsCommand, AGENTS_HELP } from "./commands/agents.js";
 import { doctorCommand, DOCTOR_HELP } from "./commands/doctor.js";
 import { fleetCommand, FLEET_HELP } from "./commands/fleet.js";
+import { hooksAuditCommand, HOOKS_AUDIT_HELP } from "./commands/hooks-audit.js";
 import { mirrorCommand, MIRROR_HELP } from "./commands/mirror.js";
 import { portfolioCommand, PORTFOLIO_HELP } from "./commands/portfolio.js";
 import { VERSION } from "./version.js";
@@ -10,9 +11,9 @@ import { VERSION } from "./version.js";
 export const DESCRIPTION =
   "Resolve the Orca runtime binary and discover working coding agents across your fleet.";
 
-export const TOP_HELP = `usage: orca-axi [fleet|agents|projects|portfolio|doctor|mirror] [flags]
-commands[6]:
-  (none)=fleet, agents, projects, portfolio, doctor, mirror
+export const TOP_HELP = `usage: orca-axi [fleet|agents|projects|portfolio|doctor|mirror|hooks-audit] [flags]
+commands[7]:
+  (none)=fleet, agents, projects, portfolio, doctor, mirror, hooks-audit
 output:
   Default TOON shows the smallest schema that lets the agent decide next.
   --full adds every candidate path, broken symlink, and session signal.
@@ -28,6 +29,8 @@ notes:
   portfolio inspects ~/.config/orca-axi/portfolio-catalog.json across domains & tiers.
   mirror projects Firstmate fleet state into read-only Orca UI cards;
   it never mutates Firstmate or Orca state (see orca-axi mirror --help).
+  hooks-audit performs a strictly read-only audit of orca.yaml,
+  scripts/orca-worktree-*.sh, and commandSourcePolicy drift across repos.
 flags[5]:
   --json, --full, --all-machines, --help, -v/--version
 examples:
@@ -37,6 +40,7 @@ examples:
   orca-axi portfolio --domain 01 --tier 1
   orca-axi doctor --full
   orca-axi mirror --from snapshot.json
+  orca-axi hooks-audit --json
   orca-axi update --check
 `;
 
@@ -62,6 +66,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
       portfolio: (args) => portfolioCommand(args),
       doctor: (args) => doctorCommand(args),
       mirror: (args) => mirrorCommand(args),
+      "hooks-audit": (args) => hooksAuditCommand(args),
     },
     // Bare `orca-axi` is the fleet dashboard (see normalizeArgv); wiring
     // home keeps the SDK contract for the empty-argv path too.
@@ -72,6 +77,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
       if (command === "portfolio") return PORTFOLIO_HELP;
       if (command === "doctor") return DOCTOR_HELP;
       if (command === "mirror") return MIRROR_HELP;
+      if (command === "hooks-audit") return HOOKS_AUDIT_HELP;
       return undefined;
     },
   });
@@ -99,6 +105,7 @@ export function normalizeArgv(raw: string[]): string[] {
     first === "portfolio" ||
     first === "doctor" ||
     first === "mirror" ||
+    first === "hooks-audit" ||
     first === "update"
   ) {
     return raw;
