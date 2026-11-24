@@ -1088,4 +1088,179 @@ describe("hooks-audit", () => {
     };
     expect(parsedMissingCli.hooksAudit.status).not.toBe("ok");
   });
+
+  // --- R2 Regression Tests ---
+
+  it("P2 (R2): rejects YAML 1.2 non-string scalars and unquoted ': ' colons while preserving quoted colons", async () => {
+    // Non-string plain scalars in scripts.setup / scripts.archive / sharedDirectories
+    expect(parseOrcaYaml('scripts: { setup: 123, archive: "echo a" }\n')).toBeNull();
+    expect(parseOrcaYaml('scripts: { setup: true, archive: "echo a" }\n')).toBeNull();
+    expect(parseOrcaYaml('scripts: { setup: "echo a", archive: 0xff }\n')).toBeNull();
+    expect(parseOrcaYaml('scripts: { setup: "echo a", archive: 0o77 }\n')).toBeNull();
+    expect(parseOrcaYaml('scripts: { setup: "echo a", archive: 3.14 }\n')).toBeNull();
+    expect(parseOrcaYaml('scripts: { setup: "echo a", archive: .inf }\n')).toBeNull();
+    expect(parseOrcaYaml('scripts: { setup: "echo a", archive: .nan }\n')).toBeNull();
+    expect(
+      parseOrcaYaml('scripts: { setup: "echo a", archive: "echo a" }\nsharedDirectories: [true]\n'),
+    ).toBeNull();
+    expect(
+      parseOrcaYaml('scripts: { setup: "echo a", archive: "echo a" }\nsharedDirectories: [null]\n'),
+    ).toBeNull();
+    expect(
+      parseOrcaYaml('scripts: { setup: "echo a", archive: "echo a" }\nsharedDirectories: [~]\n'),
+    ).toBeNull();
+
+    // Unquoted ': ' and trailing ':' in plain scalars must fail closed
+    expect(parseOrcaYaml('scripts: { setup: echo a: b, archive: "echo a" }\n')).toBeNull();
+    expect(parseOrcaYaml('scripts:\n  setup: echo a: b\n  archive: "echo a"\n')).toBeNull();
+    expect(parseOrcaYaml('scripts: { setup: echo a:, archive: "echo a" }\n')).toBeNull();
+
+    // Control: quoted scalar with ': ' and unquoted URL without ': ' must remain valid
+    expect(parseOrcaYaml('scripts: { setup: "echo a: b", archive: "echo a" }\n')).toEqual({
+      setupCommand: "echo a: b",
+      archiveCommand: "echo a",
+      sharedDirectories: [],
+    });
+    expect(
+      parseOrcaYaml('scripts: { setup: "echo http://localhost:3000", archive: "echo a" }\n'),
+    ).toEqual({
+      setupCommand: "echo http://localhost:3000",
+      archiveCommand: "echo a",
+      sharedDirectories: [],
+    });
+
+    // End-to-end audit must emit invalid_orca_yaml (never clean) for non-string / invalid colon
+    const numericSetupRepo = makeRepo("numeric-setup", {
+      orcaYaml: 'scripts: { setup: 123, archive: "echo a" }\n',
+    });
+    const colonSetupRepo = makeRepo("colon-setup", {
+      orcaYaml: 'scripts: { setup: echo a: b, archive: "echo a" }\n',
+    });
+    const nullSharedRepo = makeRepo("null-shared", {
+      orcaYaml: 'scripts: { setup: "echo a", archive: "echo a" }\nsharedDirectories: [null]\n',
+    });
+    const quotedColonRepo = makeRepo("quoted-colon", {
+      orcaYaml: 'scripts: { setup: "echo a: b", archive: "echo a" }\n',
+    });
+
+    const out = await hooksAuditCommand(["--json"], {
+      resolve: () => okResolution(),
+      runOrcaRepoList: () =>
+        orcaRepoListJson([
+          { displayName: "numeric-setup", path: numericSetupRepo },
+          { displayName: "colon-setup", path: colonSetupRepo },
+          { displayName: "null-shared", path: nullSharedRepo },
+          { displayName: "quoted-colon", path: quotedColonRepo },
+        ]),
+    });
+
+    const parsed = JSON.parse(out) as {
+      hooksAudit: {
+        repos: Array<{
+          name: string;
+          status: string;
+          findings: Array<{ code: string }>;
+        }>;
+      };
+    };
+
+    for (const badName of ["numeric-setup", "colon-setup", "null-shared"]) {
+      const repo = parsed.hooksAudit.repos.find((r) => r.name === badName);
+      expect(repo?.status).toBe("drift");
+      expect(repo?.findings.map((f) => f.code)).toContain("invalid_orca_yaml");
+    }
+
+    const control = parsed.hooksAudit.repos.find((r) => r.name === "quoted-colon");
+    expect(control?.status).toBe("clean");
+    expect(control?.findings).toEqual([]);
+  });
+
+  it("P2 (R2): clears setupHookConfigured and archiveHookConfigured when discovered canonical hooks fail even with inline commands", async () => {
+    const inlineYaml = [
+      "scripts:",
+      '  setup: "echo inline setup"',
+      '  archive: "echo inline archive"',
+      "",
+    ].join("\n");
+
+    const unreadableDiscoveredRepo = makeRepo("unreadable-discovered", {
+      orcaYaml: inlineYaml,
+      setupScript: "#!/bin/sh\necho setup\n",
+      archiveScript: "#!/bin/sh\necho archive\n",
+    });
+    chmodSync(join(unreadableDiscoveredRepo, "scripts", "orca-worktree-setup.sh"), 0o000);
+    chmodSync(join(unreadableDiscoveredRepo, "scripts", "orca-worktree-archive.sh"), 0o000);
+
+    const oversizedDiscoveredRepo = makeRepo("oversized-discovered", {
+      orcaYaml: inlineYaml,
+      setupScript: "x".repeat(256 * 1024 + 1),
+      archiveScript: "y".repeat(256 * 1024 + 1),
+    });
+
+    const outsideHook = join(dir, "outside-discovered-hook.sh");
+    writeFileSync(outsideHook, "#!/bin/sh\necho outside\n");
+    const unsafeDiscoveredRepo = makeRepo("unsafe-discovered", {
+      orcaYaml: inlineYaml,
+    });
+    mkdirSync(join(unsafeDiscoveredRepo, "scripts"), { recursive: true });
+    symlinkSync(outsideHook, join(unsafeDiscoveredRepo, "scripts", "orca-worktree-setup.sh"));
+    linkSync(outsideHook, join(unsafeDiscoveredRepo, "scripts", "orca-worktree-archive.sh"));
+
+    try {
+      const out = await hooksAuditCommand(["--json"], {
+        resolve: () => okResolution(),
+        runOrcaRepoList: () =>
+          orcaRepoListJson([
+            { displayName: "unreadable-discovered", path: unreadableDiscoveredRepo },
+            { displayName: "oversized-discovered", path: oversizedDiscoveredRepo },
+            { displayName: "unsafe-discovered", path: unsafeDiscoveredRepo },
+          ]),
+      });
+
+      const parsed = JSON.parse(out) as {
+        hooksAudit: {
+          repos: Array<{
+            name: string;
+            status: string;
+            setupHookConfigured: boolean;
+            archiveHookConfigured: boolean;
+            findings: Array<{ code: string; file?: string }>;
+          }>;
+        };
+      };
+
+      const unreadable = parsed.hooksAudit.repos.find((r) => r.name === "unreadable-discovered");
+      expect(unreadable?.status).toBe("drift");
+      expect(unreadable?.setupHookConfigured).toBe(false);
+      expect(unreadable?.archiveHookConfigured).toBe(false);
+      expect(
+        unreadable?.findings.filter((f) => f.code === "unreadable_hook").map((f) => f.file),
+      ).toEqual(
+        expect.arrayContaining(["scripts/orca-worktree-setup.sh", "scripts/orca-worktree-archive.sh"]),
+      );
+
+      const oversized = parsed.hooksAudit.repos.find((r) => r.name === "oversized-discovered");
+      expect(oversized?.status).toBe("drift");
+      expect(oversized?.setupHookConfigured).toBe(false);
+      expect(oversized?.archiveHookConfigured).toBe(false);
+      expect(
+        oversized?.findings.filter((f) => f.code === "oversized_hook").map((f) => f.file),
+      ).toEqual(
+        expect.arrayContaining(["scripts/orca-worktree-setup.sh", "scripts/orca-worktree-archive.sh"]),
+      );
+
+      const unsafe = parsed.hooksAudit.repos.find((r) => r.name === "unsafe-discovered");
+      expect(unsafe?.status).toBe("drift");
+      expect(unsafe?.setupHookConfigured).toBe(false);
+      expect(unsafe?.archiveHookConfigured).toBe(false);
+      expect(
+        unsafe?.findings.filter((f) => f.code === "unsafe_symlink").map((f) => f.file),
+      ).toEqual(
+        expect.arrayContaining(["scripts/orca-worktree-setup.sh", "scripts/orca-worktree-archive.sh"]),
+      );
+    } finally {
+      chmodSync(join(unreadableDiscoveredRepo, "scripts", "orca-worktree-setup.sh"), 0o755);
+      chmodSync(join(unreadableDiscoveredRepo, "scripts", "orca-worktree-archive.sh"), 0o755);
+    }
+  });
 });

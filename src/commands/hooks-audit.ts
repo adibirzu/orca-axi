@@ -931,8 +931,15 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
     const res = scriptReadCache.get(scriptPath);
     if (!res) continue;
     const alreadyHandledAsRef = setupRefs.includes(scriptPath) || archiveRefs.includes(scriptPath);
-    if ((res.status === "unsafe" || res.status === "error") && !alreadyHandledAsRef) {
-      pushScriptFailureFinding(findings, scriptPath, "discovered", res, effectiveHome);
+    if (res.status === "unsafe" || res.status === "error") {
+      if (!alreadyHandledAsRef) {
+        pushScriptFailureFinding(findings, scriptPath, "discovered", res, effectiveHome);
+      }
+      if (scriptPath === "scripts/orca-worktree-setup.sh") {
+        setupHookConfigured = false;
+      } else if (scriptPath === "scripts/orca-worktree-archive.sh") {
+        archiveHookConfigured = false;
+      }
     } else if (res.status === "ok") {
       const safeScriptPath = redactOutputText(scriptPath, effectiveHome);
       if (res.content.trim().length === 0) {

@@ -18,9 +18,10 @@ export interface ParsedOrcaYaml {
   readonly sharedDirectories: readonly string[];
 }
 
+type YamlScalar = string | number | boolean | null;
+
 type YamlValue =
-  | string
-  | null
+  | YamlScalar
   | readonly YamlValue[]
   | { readonly [key: string]: YamlValue };
 
@@ -210,9 +211,40 @@ function hasDisallowedScalarPrefix(trimmed: string): boolean {
   );
 }
 
-function parseYamlScalar(raw: string): { ok: true; value: string | null } | { ok: false } {
+function parsePlainYaml12Scalar(trimmed: string): YamlScalar {
+  if (trimmed === "~" || trimmed === "null" || trimmed === "Null" || trimmed === "NULL") {
+    return null;
+  }
+  if (trimmed === "true" || trimmed === "True" || trimmed === "TRUE") {
+    return true;
+  }
+  if (trimmed === "false" || trimmed === "False" || trimmed === "FALSE") {
+    return false;
+  }
+  if (/^[-+]?[0-9]+$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+  if (/^0o[0-7]+$/.test(trimmed)) {
+    return Number.parseInt(trimmed.slice(2), 8);
+  }
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed)) {
+    return Number.parseInt(trimmed.slice(2), 16);
+  }
+  if (/^[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+  if (/^[-+]?\.(?:inf|Inf|INF)$/.test(trimmed)) {
+    return trimmed.startsWith("-") ? -Infinity : Infinity;
+  }
+  if (/^\.(?:nan|NaN|NAN)$/.test(trimmed)) {
+    return Number.NaN;
+  }
+  return trimmed;
+}
+
+function parseYamlScalar(raw: string): { ok: true; value: YamlScalar } | { ok: false } {
   const trimmed = raw.trim();
-  if (!trimmed || trimmed === "null" || trimmed === "~") {
+  if (!trimmed) {
     return { ok: true, value: null };
   }
   if (trimmed.startsWith('"')) {
@@ -224,7 +256,10 @@ function parseYamlScalar(raw: string): { ok: true; value: string | null } | { ok
   if (hasDisallowedScalarPrefix(trimmed)) {
     return { ok: false };
   }
-  return { ok: true, value: trimmed };
+  if (/:\s/.test(trimmed) || trimmed.endsWith(":")) {
+    return { ok: false };
+  }
+  return { ok: true, value: parsePlainYaml12Scalar(trimmed) };
 }
 
 function splitMappingKeyValue(trimmed: string): { keyRaw: string; restRaw: string } | null {
@@ -522,7 +557,7 @@ function parseFlowValue(raw: string, depth: number): { ok: true; value: YamlValu
       const split = splitMappingKeyValue(part.trim());
       if (!split) return { ok: false };
       const keyParsed = parseYamlScalar(split.keyRaw);
-      if (!keyParsed.ok || keyParsed.value === null) return { ok: false };
+      if (!keyParsed.ok || typeof keyParsed.value !== "string") return { ok: false };
       if (seen.has(keyParsed.value)) return { ok: false };
       seen.add(keyParsed.value);
       const valParsed = parseFlowValue(split.restRaw, depth + 1);
@@ -649,7 +684,7 @@ function parseBlockSequence(
     if (inlineMapSplit) {
       // Inline mapping item `- key: value` (possibly followed by sibling keys at itemInlineIndent)
       const firstKeyParsed = parseYamlScalar(inlineMapSplit.keyRaw);
-      if (!firstKeyParsed.ok || firstKeyParsed.value === null) return { ok: false };
+      if (!firstKeyParsed.ok || typeof firstKeyParsed.value !== "string") return { ok: false };
       const firstVal = parseInlineOrChildValue(
         cursor,
         inlineMapSplit.restRaw,
@@ -709,7 +744,7 @@ function parseBlockMapping(
     if (!split) return { ok: false };
 
     const keyParsed = parseYamlScalar(split.keyRaw);
-    if (!keyParsed.ok || keyParsed.value === null) return { ok: false };
+    if (!keyParsed.ok || typeof keyParsed.value !== "string") return { ok: false };
     const key = keyParsed.value;
     if (seen.has(key)) return { ok: false };
     seen.add(key);
@@ -792,12 +827,12 @@ export function parseOrcaYaml(raw: string): ParsedOrcaYaml | null {
   if ("scripts" in root && root.scripts !== null) {
     if (!isPlainObject(root.scripts)) return null;
     const setupRaw = root.scripts.setup;
-    if (setupRaw !== undefined && setupRaw !== null) {
+    if (setupRaw !== undefined) {
       if (typeof setupRaw !== "string") return null;
       setupCommand = setupRaw || null;
     }
     const archiveRaw = root.scripts.archive;
-    if (archiveRaw !== undefined && archiveRaw !== null) {
+    if (archiveRaw !== undefined) {
       if (typeof archiveRaw !== "string") return null;
       archiveCommand = archiveRaw || null;
     }
@@ -813,7 +848,6 @@ export function parseOrcaYaml(raw: string): ParsedOrcaYaml | null {
   if (rawDirs !== undefined && rawDirs !== null) {
     if (!Array.isArray(rawDirs)) return null;
     for (const item of rawDirs) {
-      if (item === null) continue;
       if (typeof item !== "string") return null;
       if (item) sharedDirectories.push(item);
     }
