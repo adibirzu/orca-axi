@@ -1263,4 +1263,216 @@ describe("hooks-audit", () => {
       chmodSync(join(unreadableDiscoveredRepo, "scripts", "orca-worktree-archive.sh"), 0o755);
     }
   });
+
+  // --- R3 Regression Tests ---
+
+  const DANGEROUS_PROTOTYPE_YAMLS: ReadonlyArray<{ readonly name: string; readonly yaml: string }> = [
+    // Flow __proto__ mappings (top-level, inside scripts, and quoted)
+    {
+      name: "flow-top-proto-only",
+      yaml: '{ __proto__: { scripts: { setup: "echo a", archive: "echo a" } } }\n',
+    },
+    {
+      name: "flow-top-proto-sibling",
+      yaml: '{ version: 1, __proto__: { scripts: { setup: "echo a", archive: "echo a" } } }\n',
+    },
+    {
+      name: "flow-scripts-proto",
+      yaml: 'scripts: { __proto__: { setup: "echo a", archive: "echo a" } }\n',
+    },
+    {
+      name: "flow-scripts-proto-partial",
+      yaml: 'scripts: { setup: "echo a", __proto__: { archive: "echo a" } }\n',
+    },
+    {
+      name: "flow-scripts-quoted-proto",
+      yaml: 'scripts: { "__proto__": { setup: "echo a", archive: "echo a" } }\n',
+    },
+    // Block __proto__ mappings (top-level, inside scripts, and quoted)
+    {
+      name: "block-top-proto-only",
+      yaml: [
+        "__proto__:",
+        "  scripts:",
+        '    setup: "echo a"',
+        '    archive: "echo a"',
+        "",
+      ].join("\n"),
+    },
+    {
+      name: "block-top-proto-sibling",
+      yaml: [
+        "version: 1",
+        "__proto__:",
+        "  scripts:",
+        '    setup: "echo a"',
+        '    archive: "echo a"',
+        "",
+      ].join("\n"),
+    },
+    {
+      name: "block-scripts-proto",
+      yaml: [
+        "scripts:",
+        "  __proto__:",
+        '    setup: "echo a"',
+        '    archive: "echo a"',
+        "",
+      ].join("\n"),
+    },
+    {
+      name: "block-scripts-proto-partial",
+      yaml: [
+        "scripts:",
+        '  setup: "echo a"',
+        "  __proto__:",
+        '    archive: "echo a"',
+        "",
+      ].join("\n"),
+    },
+    {
+      name: "block-scripts-quoted-proto",
+      yaml: [
+        "scripts:",
+        '  "__proto__":',
+        '    setup: "echo a"',
+        '    archive: "echo a"',
+        "",
+      ].join("\n"),
+    },
+    // constructor and prototype mapping keys (flow and block)
+    {
+      name: "flow-top-constructor",
+      yaml: '{ constructor: { prototype: {} }, scripts: { setup: "echo a", archive: "echo a" } }\n',
+    },
+    {
+      name: "flow-top-prototype",
+      yaml: '{ prototype: {}, scripts: { setup: "echo a", archive: "echo a" } }\n',
+    },
+    {
+      name: "flow-scripts-constructor",
+      yaml: 'scripts: { setup: "echo a", archive: "echo a", constructor: "x" }\n',
+    },
+    {
+      name: "flow-scripts-prototype",
+      yaml: 'scripts: { setup: "echo a", archive: "echo a", prototype: "x" }\n',
+    },
+    {
+      name: "block-top-constructor",
+      yaml: [
+        "constructor:",
+        "  prototype: {}",
+        "scripts:",
+        '  setup: "echo a"',
+        '  archive: "echo a"',
+        "",
+      ].join("\n"),
+    },
+    {
+      name: "block-top-prototype",
+      yaml: [
+        "prototype: {}",
+        "scripts:",
+        '  setup: "echo a"',
+        '  archive: "echo a"',
+        "",
+      ].join("\n"),
+    },
+    {
+      name: "block-scripts-constructor",
+      yaml: [
+        "scripts:",
+        '  setup: "echo a"',
+        '  archive: "echo a"',
+        "  'constructor': \"x\"",
+        "",
+      ].join("\n"),
+    },
+    {
+      name: "block-scripts-prototype",
+      yaml: [
+        "scripts:",
+        '  setup: "echo a"',
+        '  archive: "echo a"',
+        '  prototype: "x"',
+        "",
+      ].join("\n"),
+    },
+    // Inline sequence mapping item with dangerous keys
+    {
+      name: "seq-inline-proto",
+      yaml: [
+        "scripts:",
+        '  setup: "echo a"',
+        '  archive: "echo a"',
+        "extra:",
+        "  - __proto__: injected",
+        "",
+      ].join("\n"),
+    },
+    {
+      name: "seq-inline-constructor",
+      yaml: [
+        "scripts:",
+        '  setup: "echo a"',
+        '  archive: "echo a"',
+        "extra:",
+        "  - constructor: injected",
+        "",
+      ].join("\n"),
+    },
+    {
+      name: "seq-inline-prototype",
+      yaml: [
+        "scripts:",
+        '  setup: "echo a"',
+        '  archive: "echo a"',
+        "extra:",
+        "  - prototype: injected",
+        "",
+      ].join("\n"),
+    },
+  ];
+
+  it("P1 (R3): parseOrcaYaml rejects __proto__, constructor, and prototype mapping keys in flow and block YAML", () => {
+    for (const tc of DANGEROUS_PROTOTYPE_YAMLS) {
+      expect(parseOrcaYaml(tc.yaml), `expected parseOrcaYaml to reject ${tc.name}`).toBeNull();
+    }
+  });
+
+  it("P1 (R3): hooks-audit fails closed as invalid_orca_yaml for __proto__, constructor, and prototype mappings without false-clean audit", async () => {
+    const repos = DANGEROUS_PROTOTYPE_YAMLS.map((tc) => ({
+      name: tc.name,
+      path: makeRepo(tc.name, { orcaYaml: tc.yaml }),
+    }));
+
+    const out = await hooksAuditCommand(["--json"], {
+      resolve: () => okResolution(),
+      runOrcaRepoList: () =>
+        orcaRepoListJson(repos.map((r) => ({ displayName: r.name, path: r.path }))),
+    });
+
+    const parsed = JSON.parse(out) as {
+      hooksAudit: {
+        summary: { cleanRepos: number; driftRepos: number };
+        repos: Array<{
+          name: string;
+          status: string;
+          setupHookConfigured: boolean;
+          archiveHookConfigured: boolean;
+          findings: Array<{ code: string }>;
+        }>;
+      };
+    };
+
+    expect(parsed.hooksAudit.summary.cleanRepos).toBe(0);
+    expect(parsed.hooksAudit.summary.driftRepos).toBe(DANGEROUS_PROTOTYPE_YAMLS.length);
+    for (const tc of DANGEROUS_PROTOTYPE_YAMLS) {
+      const repo = parsed.hooksAudit.repos.find((r) => r.name === tc.name);
+      expect(repo?.status, `expected ${tc.name} to be drift`).toBe("drift");
+      expect(repo?.setupHookConfigured, `expected ${tc.name} setupHookConfigured=false`).toBe(false);
+      expect(repo?.archiveHookConfigured, `expected ${tc.name} archiveHookConfigured=false`).toBe(false);
+      expect(repo?.findings.map((f) => f.code)).toContain("invalid_orca_yaml");
+    }
+  });
 });

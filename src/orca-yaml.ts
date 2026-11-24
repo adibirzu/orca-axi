@@ -94,26 +94,43 @@ function skipBlankLines(cursor: LineCursor): boolean {
   return true;
 }
 
-const SIMPLE_ESCAPES: Record<string, string> = {
-  "0": "\0",
-  a: "\x07",
-  b: "\b",
-  t: "\t",
-  "\t": "\t",
-  n: "\n",
-  v: "\v",
-  f: "\f",
-  r: "\r",
-  e: "\x1b",
-  " ": " ",
-  '"': '"',
-  "/": "/",
-  "\\": "\\",
-  N: "\u0085",
-  _: "\u00a0",
-  L: "\u2028",
-  P: "\u2029",
-};
+const SIMPLE_ESCAPES: Record<string, string> = Object.assign(
+  Object.create(null) as Record<string, string>,
+  {
+    "0": "\0",
+    a: "\x07",
+    b: "\b",
+    t: "\t",
+    "\t": "\t",
+    n: "\n",
+    v: "\v",
+    f: "\f",
+    r: "\r",
+    e: "\x1b",
+    " ": " ",
+    '"': '"',
+    "/": "/",
+    "\\": "\\",
+    N: "\u0085",
+    _: "\u00a0",
+    L: "\u2028",
+    P: "\u2029",
+  },
+);
+
+const DANGEROUS_MAPPING_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function createNullPrototypeMap(): Record<string, YamlValue> {
+  return Object.create(null) as Record<string, YamlValue>;
+}
+
+function isDangerousMappingKey(key: string): boolean {
+  return DANGEROUS_MAPPING_KEYS.has(key);
+}
+
+function getOwnYamlProp(obj: Record<string, YamlValue>, key: string): YamlValue | undefined {
+  return Object.hasOwn(obj, key) ? obj[key] : undefined;
+}
 
 function parseDoubleQuotedScalar(trimmed: string): { ok: true; value: string } | { ok: false } {
   if (trimmed.length < 2 || !trimmed.startsWith('"') || !trimmed.endsWith('"')) {
@@ -143,7 +160,7 @@ function parseDoubleQuotedScalar(trimmed: string): { ok: true; value: string } |
       }
       continue;
     }
-    const mapped = SIMPLE_ESCAPES[esc];
+    const mapped = Object.hasOwn(SIMPLE_ESCAPES, esc) ? SIMPLE_ESCAPES[esc] : undefined;
     if (mapped !== undefined) {
       out += mapped;
       continue;
@@ -548,21 +565,20 @@ function parseFlowValue(raw: string, depth: number): { ok: true; value: YamlValu
   if (trimmed.startsWith("{")) {
     if (!trimmed.endsWith("}")) return { ok: false };
     const inner = trimmed.slice(1, -1).trim();
-    if (!inner) return { ok: true, value: {} };
+    if (!inner) return { ok: true, value: createNullPrototypeMap() };
     const parts = splitFlowTopLevel(inner);
     if (!parts) return { ok: false };
-    const map: Record<string, YamlValue> = {};
-    const seen = new Set<string>();
+    const map = createNullPrototypeMap();
     for (const part of parts) {
       const split = splitMappingKeyValue(part.trim());
       if (!split) return { ok: false };
       const keyParsed = parseYamlScalar(split.keyRaw);
       if (!keyParsed.ok || typeof keyParsed.value !== "string") return { ok: false };
-      if (seen.has(keyParsed.value)) return { ok: false };
-      seen.add(keyParsed.value);
+      const key = keyParsed.value;
+      if (isDangerousMappingKey(key) || Object.hasOwn(map, key)) return { ok: false };
       const valParsed = parseFlowValue(split.restRaw, depth + 1);
       if (!valParsed.ok) return { ok: false };
-      map[keyParsed.value] = valParsed.value;
+      map[key] = valParsed.value;
     }
     return { ok: true, value: map };
   }
@@ -685,6 +701,8 @@ function parseBlockSequence(
       // Inline mapping item `- key: value` (possibly followed by sibling keys at itemInlineIndent)
       const firstKeyParsed = parseYamlScalar(inlineMapSplit.keyRaw);
       if (!firstKeyParsed.ok || typeof firstKeyParsed.value !== "string") return { ok: false };
+      const firstKey = firstKeyParsed.value;
+      if (isDangerousMappingKey(firstKey)) return { ok: false };
       const firstVal = parseInlineOrChildValue(
         cursor,
         inlineMapSplit.restRaw,
@@ -692,17 +710,22 @@ function parseBlockSequence(
         depth + 1,
       );
       if (!firstVal.ok) return { ok: false };
-      const itemMap: Record<string, YamlValue> = { [firstKeyParsed.value]: firstVal.value };
-      const seen = new Set<string>([firstKeyParsed.value]);
+      const itemMap = createNullPrototypeMap();
+      itemMap[firstKey] = firstVal.value;
 
       if (!skipBlankLines(cursor)) return { ok: false };
       if (cursor.index < cursor.lines.length) {
         const siblingLine = cursor.lines[cursor.index] ?? "";
         if (hasLeadingTab(siblingLine)) return { ok: false };
         if (getIndent(siblingLine) === itemInlineIndent && !isSequenceIndicator(stripYamlComment(siblingLine).trim())) {
-          const restMap = parseBlockMapping(cursor, itemInlineIndent, depth + 1, seen);
+          const restMap = parseBlockMapping(cursor, itemInlineIndent, depth + 1, itemMap);
           if (!restMap.ok) return { ok: false };
-          Object.assign(itemMap, restMap.value);
+          for (const key of Object.keys(restMap.value)) {
+            if (isDangerousMappingKey(key) || Object.hasOwn(itemMap, key)) {
+              return { ok: false };
+            }
+            itemMap[key] = getOwnYamlProp(restMap.value, key) ?? null;
+          }
         }
       }
       items.push(itemMap);
@@ -721,11 +744,10 @@ function parseBlockMapping(
   cursor: LineCursor,
   expectedIndent: number,
   depth: number,
-  initialSeenKeys?: Set<string>,
+  existingMap?: Record<string, YamlValue>,
 ): { ok: true; value: Record<string, YamlValue> } | { ok: false } {
   if (depth > MAX_ORCA_YAML_DEPTH) return { ok: false };
-  const map: Record<string, YamlValue> = {};
-  const seen = initialSeenKeys ?? new Set<string>();
+  const map = createNullPrototypeMap();
 
   while (cursor.index < cursor.lines.length) {
     if (!skipBlankLines(cursor)) return { ok: false };
@@ -746,8 +768,13 @@ function parseBlockMapping(
     const keyParsed = parseYamlScalar(split.keyRaw);
     if (!keyParsed.ok || typeof keyParsed.value !== "string") return { ok: false };
     const key = keyParsed.value;
-    if (seen.has(key)) return { ok: false };
-    seen.add(key);
+    if (
+      isDangerousMappingKey(key) ||
+      Object.hasOwn(map, key) ||
+      (existingMap !== undefined && Object.hasOwn(existingMap, key))
+    ) {
+      return { ok: false };
+    }
 
     const valParsed = parseInlineOrChildValue(cursor, split.restRaw, indent, depth);
     if (!valParsed.ok) return { ok: false };
@@ -824,27 +851,29 @@ export function parseOrcaYaml(raw: string): ParsedOrcaYaml | null {
 
   let setupCommand: string | null = null;
   let archiveCommand: string | null = null;
-  if ("scripts" in root && root.scripts !== null) {
-    if (!isPlainObject(root.scripts)) return null;
-    const setupRaw = root.scripts.setup;
-    if (setupRaw !== undefined) {
-      if (typeof setupRaw !== "string") return null;
-      setupCommand = setupRaw || null;
-    }
-    const archiveRaw = root.scripts.archive;
-    if (archiveRaw !== undefined) {
-      if (typeof archiveRaw !== "string") return null;
-      archiveCommand = archiveRaw || null;
+  if (Object.hasOwn(root, "scripts")) {
+    const scriptsVal = getOwnYamlProp(root, "scripts");
+    if (scriptsVal !== null && scriptsVal !== undefined) {
+      if (!isPlainObject(scriptsVal)) return null;
+      const setupRaw = getOwnYamlProp(scriptsVal, "setup");
+      if (setupRaw !== undefined) {
+        if (typeof setupRaw !== "string") return null;
+        setupCommand = setupRaw || null;
+      }
+      const archiveRaw = getOwnYamlProp(scriptsVal, "archive");
+      if (archiveRaw !== undefined) {
+        if (typeof archiveRaw !== "string") return null;
+        archiveCommand = archiveRaw || null;
+      }
     }
   }
 
   const sharedDirectories: string[] = [];
-  const rawDirs =
-    "sharedDirectories" in root
-      ? root.sharedDirectories
-      : "shared_directories" in root
-        ? root.shared_directories
-        : undefined;
+  const rawDirs = Object.hasOwn(root, "sharedDirectories")
+    ? getOwnYamlProp(root, "sharedDirectories")
+    : Object.hasOwn(root, "shared_directories")
+      ? getOwnYamlProp(root, "shared_directories")
+      : undefined;
   if (rawDirs !== undefined && rawDirs !== null) {
     if (!Array.isArray(rawDirs)) return null;
     for (const item of rawDirs) {

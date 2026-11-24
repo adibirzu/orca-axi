@@ -350,6 +350,12 @@ function sanitizeRefusalReason(reason: string | undefined, effectiveHome: string
   return redactOutputText(strippedVersion, effectiveHome);
 }
 
+const DANGEROUS_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function ownProp(obj: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(obj, key) ? obj[key] : undefined;
+}
+
 function sanitizePayloadValue<T>(value: T, effectiveHome: string): T {
   if (typeof value === "string") {
     return redactOutputText(value, effectiveHome) as unknown as T;
@@ -360,7 +366,7 @@ function sanitizePayloadValue<T>(value: T, effectiveHome: string): T {
   if (typeof value === "object" && value !== null) {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
-      if (v === undefined) continue;
+      if (v === undefined || DANGEROUS_OBJECT_KEYS.has(k)) continue;
       if (k === "commandSourcePolicy" && typeof v === "string") {
         out[k] = sanitizeCommandSourcePolicy(v);
       } else {
@@ -569,10 +575,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function extractEnvelopeError(parsed: Record<string, unknown>): string {
-  const err = parsed.error;
+  const err = ownProp(parsed, "error");
   if (typeof err === "string" && err.trim()) return err.trim();
-  if (isRecord(err) && typeof err.message === "string" && err.message.trim()) {
-    return err.message.trim();
+  if (isRecord(err)) {
+    const msg = ownProp(err, "message");
+    if (typeof msg === "string" && msg.trim()) {
+      return msg.trim();
+    }
   }
   return "Orca CLI returned an error envelope";
 }
@@ -591,38 +600,47 @@ function parseOrcaRepoList(raw: string): OrcaRegisteredRepo[] {
       "Run `orca repo list --json` directly to verify the Orca CLI output",
     ]);
   }
-  if (parsed.ok === false) {
+  const okVal = ownProp(parsed, "ok");
+  if (okVal === false) {
     throw new AxiError(
       `\`orca repo list --json\` failed: ${extractEnvelopeError(parsed)}`,
       "RUNTIME_ERROR",
       ["Ensure the Orca runtime daemon is running and `orca repo list --json` succeeds"],
     );
   }
-  if (parsed.ok !== true || !isRecord(parsed.result) || !Array.isArray(parsed.result.repos)) {
+  const resultVal = ownProp(parsed, "result");
+  const reposVal = isRecord(resultVal) ? ownProp(resultVal, "repos") : undefined;
+  if (okVal !== true || !Array.isArray(reposVal)) {
     throw new AxiError("`orca repo list --json` returned an unexpected response shape", "RUNTIME_ERROR", [
       "Run `orca repo list --json` directly to verify the Orca CLI output",
     ]);
   }
 
   const out: OrcaRegisteredRepo[] = [];
-  for (const item of parsed.result.repos) {
+  for (const item of reposVal) {
     if (!isRecord(item)) continue;
-    const path = typeof item.path === "string" ? item.path.trim() : "";
+    const rawItemPath = ownProp(item, "path");
+    const path = typeof rawItemPath === "string" ? rawItemPath.trim() : "";
     if (!path) continue;
+    const rawDisplayName = ownProp(item, "displayName");
     const displayName =
-      typeof item.displayName === "string" && item.displayName.trim()
-        ? item.displayName.trim()
+      typeof rawDisplayName === "string" && rawDisplayName.trim()
+        ? rawDisplayName.trim()
         : basename(path);
-    const hookSettings = isRecord(item.hookSettings) ? item.hookSettings : null;
+    const rawHookSettings = ownProp(item, "hookSettings");
+    const hookSettings = isRecord(rawHookSettings) ? rawHookSettings : null;
+    const rawCommandSourcePolicy = hookSettings ? ownProp(hookSettings, "commandSourcePolicy") : undefined;
     const rawPolicy =
-      hookSettings && typeof hookSettings.commandSourcePolicy === "string"
-        ? hookSettings.commandSourcePolicy.trim()
+      typeof rawCommandSourcePolicy === "string"
+        ? rawCommandSourcePolicy.trim()
         : null;
     const commandSourcePolicy = sanitizeCommandSourcePolicy(rawPolicy);
-    const scripts = hookSettings && isRecord(hookSettings.scripts) ? hookSettings.scripts : null;
-    const setupCmd = scripts && typeof scripts.setup === "string" ? scripts.setup.trim() : "";
-    const archiveCmd =
-      scripts && typeof scripts.archive === "string" ? scripts.archive.trim() : "";
+    const rawScripts = hookSettings ? ownProp(hookSettings, "scripts") : undefined;
+    const scripts = isRecord(rawScripts) ? rawScripts : null;
+    const rawSetup = scripts ? ownProp(scripts, "setup") : undefined;
+    const rawArchive = scripts ? ownProp(scripts, "archive") : undefined;
+    const setupCmd = typeof rawSetup === "string" ? rawSetup.trim() : "";
+    const archiveCmd = typeof rawArchive === "string" ? rawArchive.trim() : "";
 
     out.push({
       displayName,
@@ -1040,24 +1058,28 @@ function renderHooksAuditOutput(
   }
 
   const sanitizedHelp = toonHelpLines.map((line) => redactOutputText(line, effectiveHome));
-  if ("repos" in sanitizedPayload && Array.isArray(sanitizedPayload.repos) && !("reason" in sanitizedPayload && (sanitizedPayload.status === "refused" || sanitizedPayload.status === "error"))) {
-    const reports = sanitizedPayload.repos as AuditedRepoReport[];
-    const summary = sanitizedPayload.summary as HooksAuditSummary;
+  const payloadRepos = ownProp(sanitizedPayload, "repos");
+  const payloadStatus = ownProp(sanitizedPayload, "status");
+  const payloadReason = ownProp(sanitizedPayload, "reason");
+  if (
+    Array.isArray(payloadRepos) &&
+    !(payloadReason !== undefined && (payloadStatus === "refused" || payloadStatus === "error"))
+  ) {
+    const reports = payloadRepos as AuditedRepoReport[];
+    const summary = ownProp(sanitizedPayload, "summary") as HooksAuditSummary;
     const activeCodeCounts = Object.fromEntries(
-      Object.entries(summary.byCode).filter(([, count]) => count > 0),
+      Object.entries(summary.byCode).filter(([code, count]) => !DANGEROUS_OBJECT_KEYS.has(code) && count > 0),
     );
+    const payloadOrcaReason = ownProp(sanitizedPayload, "orcaReason");
+    const payloadCatalogReason = ownProp(sanitizedPayload, "catalogReason");
     const compactView = {
       hooksAudit: {
-        status: sanitizedPayload.status,
-        platform: sanitizedPayload.platform,
-        scope: sanitizedPayload.scope,
-        ...(typeof sanitizedPayload.reason === "string" ? { reason: sanitizedPayload.reason } : {}),
-        ...(typeof sanitizedPayload.orcaReason === "string"
-          ? { orcaReason: sanitizedPayload.orcaReason }
-          : {}),
-        ...(typeof sanitizedPayload.catalogReason === "string"
-          ? { catalogReason: sanitizedPayload.catalogReason }
-          : {}),
+        status: payloadStatus,
+        platform: ownProp(sanitizedPayload, "platform"),
+        scope: ownProp(sanitizedPayload, "scope"),
+        ...(typeof payloadReason === "string" ? { reason: payloadReason } : {}),
+        ...(typeof payloadOrcaReason === "string" ? { orcaReason: payloadOrcaReason } : {}),
+        ...(typeof payloadCatalogReason === "string" ? { catalogReason: payloadCatalogReason } : {}),
         summary: {
           totalRepos: summary.totalRepos,
           cleanRepos: summary.cleanRepos,
