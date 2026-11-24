@@ -231,17 +231,20 @@ description:
   with --repo <path>). Resolves the Orca binary first (preserving the
   GNOME screen-reader guard), queries `orca repo list --json`, and
   safely inspects on-disk orca.yaml and scripts/orca-worktree-*.sh using
-  O_NOFOLLOW reads without ever mutating repo files or Orca settings.
+  O_NOFOLLOW and st_nlink == 1 reads without mutating repo files or Orca settings.
 findings:
   missing_orca_yaml     checked-in orca.yaml is absent
   local_only_override   Orca commandSourcePolicy is local-only (bypasses orca.yaml)
   missing_archive_hook  archive hook missing in orca.yaml or script missing on disk
   unsafe_shared_dirs    sharedDirectories includes .venv, node_modules, .next, target, or caches
   missing_setup_script  orca.yaml references a setup script that does not exist on disk
-  unsafe_symlink        hook file or scripts/ is a symlink, special file, or escapes repo root
+  unsafe_symlink        hook file or scripts/ is a symlink, hardlink, special file, or escapes repo root
   invalid_orca_yaml     orca.yaml could not be parsed as a valid YAML mapping
   missing_repo_dir      registered/catalog repo directory does not exist on disk
+  unreadable_hook       referenced or discovered hook script could not be read
+  oversized_hook        hook script exceeds the 256 KiB inspection limit
 outputs:
+  status: ok | degraded | refused | error (exit 0 on ok/refused or --repo fallback; exit 1 on query/catalog failure; exit 2 on CLI usage error)
   TOON summary: status, scope, summary{}, repos[]
   --json  machine-readable {hooksAudit: ...} envelope
 flags[4]:
@@ -256,8 +259,8 @@ examples:
 ## Exit codes
 
 ```
-0  success (including idempotent no-ops and doctor diagnostics)
-1  error: unexpected failure
+0  success (including idempotent no-ops, doctor diagnostics, and screen-reader refusal)
+1  error: unexpected failure or hooks-audit operational query/catalog failure
 2  usage error: unknown flag, unknown command, bad update option
 ```
 

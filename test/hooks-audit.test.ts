@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -13,7 +14,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { main } from "../src/cli.js";
-import { hooksAuditCommand } from "../src/commands/hooks-audit.js";
+import { hooksAuditCommand, parseOrcaYaml } from "../src/commands/hooks-audit.js";
 import type { OrcaResolution } from "../src/orca-resolve.js";
 import type { CatalogLoadResult } from "../src/portfolio/catalog.js";
 
@@ -678,5 +679,413 @@ describe("hooks-audit", () => {
     expect(parsed.hooksAudit.summary.byCode.invalid_orca_yaml).toBe(1);
     expect(parsed.hooksAudit.summary.byCode.empty_hook_script).toBe(1);
     expect(parsed.hooksAudit.summary.byCode.hardcoded_home_path).toBe(1);
+  });
+
+  // --- R1 Regression Tests (Findings 1-6) ---
+
+  it("P1: redacts hostile metadata (displayName, commandSourcePolicy), filenames, and screen-reader --version strings in JSON and TOON", async () => {
+    const hostileRepo = makeRepo("hostile-repo", {
+      orcaYaml: [
+        "scripts:",
+        '  setup: "bash scripts/missing-10.203.0.77-SYNTHETIC_SECRET_R1.sh"',
+        '  archive: "bash scripts/archive-10.203.0.77-SYNTHETIC_SECRET_R1.sh"',
+      ].join("\n"),
+    });
+    mkdirSync(join(hostileRepo, "scripts"), { recursive: true });
+    writeFileSync(
+      join(hostileRepo, "scripts", "orca-worktree-10.203.0.77-SYNTHETIC_SECRET_R1.sh"),
+      "   \n",
+    );
+
+    const orcaPayload = orcaRepoListJson([
+      {
+        displayName: "tenant-r1-secret http://10.203.0.77 SYNTHETIC_SECRET_R1",
+        path: hostileRepo,
+        commandSourcePolicy: "local-only tenant-r1-secret",
+      },
+    ]);
+
+    const jsonOut = await hooksAuditCommand(["--json"], {
+      resolve: () => okResolution(),
+      runOrcaRepoList: () => orcaPayload,
+    });
+    const toonOut = await hooksAuditCommand([], {
+      resolve: () => okResolution(),
+      runOrcaRepoList: () => orcaPayload,
+    });
+
+    for (const marker of ["tenant-r1-secret", "10.203.0.77", "SYNTHETIC_SECRET_R1"]) {
+      expect(jsonOut).not.toContain(marker);
+      expect(toonOut).not.toContain(marker);
+    }
+    const parsedMeta = JSON.parse(jsonOut) as {
+      hooksAudit: { repos: Array<{ commandSourcePolicy: string | null }> };
+    };
+    expect(parsedMeta.hooksAudit.repos[0]?.commandSourcePolicy).not.toBe(
+      "local-only tenant-r1-secret",
+    );
+
+    // Hostile GNOME screen-reader --version string
+    process.env.ORCA_CLI_COMMAND = fakeOrca("46.1 http://10.203.0.77 SYNTHETIC_SECRET_R1");
+    process.env.ORCA_AXI_PLATFORM = "linux";
+    const guardJson = await runCli(["hooks-audit", "--json"]);
+    const guardToon = await runCli(["hooks-audit"]);
+    expect(guardJson.exitCode).toBe(0);
+    expect(guardToon.exitCode).toBe(0);
+    const parsedGuard = JSON.parse(guardJson.output) as {
+      hooksAudit: { status: string; reason: string };
+    };
+    expect(parsedGuard.hooksAudit.status).toBe("refused");
+    for (const marker of ["10.203.0.77", "SYNTHETIC_SECRET_R1"]) {
+      expect(guardJson.output).not.toContain(marker);
+      expect(guardToon.output).not.toContain(marker);
+    }
+  });
+
+  it("P2: rejects hardlinked orca.yaml and hardlinked hook scripts (st_nlink > 1)", async () => {
+    const outsideYaml = join(dir, "outside-orca.yaml");
+    writeFileSync(
+      outsideYaml,
+      [
+        "scripts:",
+        '  setup: "echo HARDLINK_YAML_SECRET"',
+        '  archive: "echo ok"',
+      ].join("\n"),
+    );
+    const hardlinkYamlRepo = makeRepo("hardlink-yaml");
+    linkSync(outsideYaml, join(hardlinkYamlRepo, "orca.yaml"));
+
+    const outsideScript = join(dir, "outside-hook.sh");
+    writeFileSync(outsideScript, "#!/bin/sh\necho HARDLINK_SCRIPT_SECRET\n");
+    const hardlinkScriptsRepo = makeRepo("hardlink-scripts", {
+      orcaYaml: [
+        "scripts:",
+        '  setup: "bash scripts/orca-worktree-setup.sh"',
+        '  archive: "bash scripts/orca-worktree-archive.sh"',
+      ].join("\n"),
+    });
+    mkdirSync(join(hardlinkScriptsRepo, "scripts"), { recursive: true });
+    linkSync(outsideScript, join(hardlinkScriptsRepo, "scripts", "orca-worktree-setup.sh"));
+    linkSync(outsideScript, join(hardlinkScriptsRepo, "scripts", "orca-worktree-archive.sh"));
+
+    const out = await hooksAuditCommand(["--json"], {
+      resolve: () => okResolution(),
+      runOrcaRepoList: () =>
+        orcaRepoListJson([
+          { displayName: "hardlink-yaml", path: hardlinkYamlRepo },
+          { displayName: "hardlink-scripts", path: hardlinkScriptsRepo },
+        ]),
+    });
+
+    expect(out).not.toContain("HARDLINK_YAML_SECRET");
+    expect(out).not.toContain("HARDLINK_SCRIPT_SECRET");
+    const parsed = JSON.parse(out) as {
+      hooksAudit: {
+        repos: Array<{
+          name: string;
+          status: string;
+          setupHookConfigured: boolean;
+          archiveHookConfigured: boolean;
+          findings: Array<{ code: string; message: string }>;
+        }>;
+      };
+    };
+
+    const yamlRepo = parsed.hooksAudit.repos.find((r) => r.name === "hardlink-yaml");
+    expect(yamlRepo?.status).toBe("drift");
+    expect(yamlRepo?.findings.map((f) => f.code)).toContain("unsafe_symlink");
+
+    const scriptRepo = parsed.hooksAudit.repos.find((r) => r.name === "hardlink-scripts");
+    expect(scriptRepo?.status).toBe("drift");
+    expect(scriptRepo?.setupHookConfigured).toBe(false);
+    expect(scriptRepo?.archiveHookConfigured).toBe(false);
+    expect(scriptRepo?.findings.map((f) => f.code)).toContain("unsafe_symlink");
+  });
+
+  it("P2: handles YAML aliases, duplicate keys, invalid escapes, multiline flow arrays, inline maps, and block scalars accurately", async () => {
+    // Rejects: alias, duplicate keys, invalid escape "\q"
+    expect(parseOrcaYaml("sharedDirectories: [&dep .venv, *dep]\n")).toBeNull();
+    expect(parseOrcaYaml("sharedDirectories:\n  - &dep .venv\n  - *dep\n")).toBeNull();
+    expect(
+      parseOrcaYaml(
+        'scripts:\n  setup: "bash scripts/orca-worktree-setup.sh"\n  setup: "echo dup"\n',
+      ),
+    ).toBeNull();
+    expect(
+      parseOrcaYaml('scripts: { setup: "echo a", setup: "echo b" }\n'),
+    ).toBeNull();
+    expect(
+      parseOrcaYaml('sharedDirectories:\n  - "\\q"\n'),
+    ).toBeNull();
+    expect(
+      parseOrcaYaml('sharedDirectories: ["\\q"]\n'),
+    ).toBeNull();
+
+    expect(
+      parseOrcaYaml(
+        'scripts:\n  setup: |\n    bash scripts/orca-worktree-setup.sh\n  archive: >-\n    bash scripts/orca-worktree-archive.sh\n',
+      ),
+    ).toEqual({
+      setupCommand: "bash scripts/orca-worktree-setup.sh\n",
+      archiveCommand: "bash scripts/orca-worktree-archive.sh",
+      sharedDirectories: [],
+    });
+
+    // Accepts: multiline flow array, inline scripts map, block scalars
+    const inlineAndMultilineFlow = makeRepo("inline-multiline", {
+      orcaYaml: [
+        'scripts: { setup: "bash scripts/orca-worktree-setup.sh", archive: "bash scripts/orca-worktree-archive.sh" }',
+        "sharedDirectories: [",
+        "  .venv,",
+        "  # comment inside flow array",
+        '  "apps/web/node_modules",',
+        "]",
+      ].join("\n"),
+      setupScript: "#!/bin/sh\necho setup\n",
+      archiveScript: "#!/bin/sh\necho archive\n",
+    });
+
+    const blockScalarRepo = makeRepo("block-scalar", {
+      orcaYaml: [
+        "scripts:",
+        "  setup: |",
+        "    if [ -f scripts/orca-worktree-setup.sh ]; then",
+        "      bash scripts/orca-worktree-setup.sh && echo *.sh",
+        "    fi",
+        "  archive: >-",
+        "    bash scripts/orca-worktree-archive.sh",
+      ].join("\n"),
+      setupScript: "#!/bin/sh\necho setup\n",
+      archiveScript: "#!/bin/sh\necho archive\n",
+    });
+
+    const aliasRepo = makeRepo("alias-repo", {
+      orcaYaml: [
+        "scripts:",
+        '  setup: "bash scripts/orca-worktree-setup.sh"',
+        '  archive: "bash scripts/orca-worktree-archive.sh"',
+        "sharedDirectories:",
+        "  - &dep .venv",
+        "  - *dep",
+      ].join("\n"),
+      setupScript: "#!/bin/sh\necho setup\n",
+      archiveScript: "#!/bin/sh\necho archive\n",
+    });
+
+    const out = await hooksAuditCommand(["--json"], {
+      resolve: () => okResolution(),
+      runOrcaRepoList: () =>
+        orcaRepoListJson([
+          { displayName: "inline-multiline", path: inlineAndMultilineFlow },
+          { displayName: "block-scalar", path: blockScalarRepo },
+          { displayName: "alias-repo", path: aliasRepo },
+        ]),
+    });
+
+    const parsed = JSON.parse(out) as {
+      hooksAudit: {
+        repos: Array<{
+          name: string;
+          status: string;
+          setupHookConfigured: boolean;
+          archiveHookConfigured: boolean;
+          findings: Array<{ code: string; details?: Record<string, unknown> }>;
+        }>;
+      };
+    };
+
+    const inlineRepo = parsed.hooksAudit.repos.find((r) => r.name === "inline-multiline");
+    expect(inlineRepo?.setupHookConfigured).toBe(true);
+    expect(inlineRepo?.archiveHookConfigured).toBe(true);
+    expect(inlineRepo?.findings.map((f) => f.code)).toEqual(["unsafe_shared_dirs"]);
+    expect(inlineRepo?.findings[0]?.details?.unsafeDirs).toEqual([
+      ".venv",
+      "apps/web/node_modules",
+    ]);
+
+    const blockRepo = parsed.hooksAudit.repos.find((r) => r.name === "block-scalar");
+    expect(blockRepo?.status).toBe("clean");
+    expect(blockRepo?.setupHookConfigured).toBe(true);
+    expect(blockRepo?.archiveHookConfigured).toBe(true);
+    expect(blockRepo?.findings).toEqual([]);
+
+    const badAliasRepo = parsed.hooksAudit.repos.find((r) => r.name === "alias-repo");
+    expect(badAliasRepo?.status).toBe("drift");
+    expect(badAliasRepo?.findings.map((f) => f.code)).toContain("invalid_orca_yaml");
+  });
+
+  it("P2: flags oversized and unreadable hook scripts rather than treating them as clean/configured", async () => {
+    const oversizedRepo = makeRepo("oversized-script", {
+      orcaYaml: [
+        "scripts:",
+        '  setup: "bash scripts/orca-worktree-setup.sh"',
+        '  archive: "bash scripts/orca-worktree-archive.sh"',
+      ].join("\n"),
+      setupScript: "x".repeat(256 * 1024 + 1),
+      archiveScript: "#!/bin/sh\necho archive\n",
+    });
+
+    const unreadableRepo = makeRepo("unreadable-script", {
+      orcaYaml: [
+        "scripts:",
+        '  setup: "bash scripts/orca-worktree-setup.sh"',
+        '  archive: "bash scripts/orca-worktree-archive.sh"',
+      ].join("\n"),
+      setupScript: "#!/bin/sh\necho setup\n",
+      archiveScript: "#!/bin/sh\necho archive\n",
+    });
+    chmodSync(join(unreadableRepo, "scripts", "orca-worktree-archive.sh"), 0o000);
+
+    try {
+      const out = await hooksAuditCommand(["--json"], {
+        resolve: () => okResolution(),
+        runOrcaRepoList: () =>
+          orcaRepoListJson([
+            { displayName: "oversized-script", path: oversizedRepo },
+            { displayName: "unreadable-script", path: unreadableRepo },
+          ]),
+      });
+
+      const parsed = JSON.parse(out) as {
+        hooksAudit: {
+          repos: Array<{
+            name: string;
+            status: string;
+            setupHookConfigured: boolean;
+            archiveHookConfigured: boolean;
+            findings: Array<{ code: string }>;
+          }>;
+        };
+      };
+
+      const oversized = parsed.hooksAudit.repos.find((r) => r.name === "oversized-script");
+      expect(oversized?.status).toBe("drift");
+      expect(oversized?.setupHookConfigured).toBe(false);
+      expect(oversized?.findings.map((f) => f.code)).toContain("oversized_hook");
+
+      const unreadable = parsed.hooksAudit.repos.find((r) => r.name === "unreadable-script");
+      expect(unreadable?.status).toBe("drift");
+      expect(unreadable?.archiveHookConfigured).toBe(false);
+      expect(unreadable?.findings.map((f) => f.code)).toContain("unreadable_hook");
+    } finally {
+      chmodSync(join(unreadableRepo, "scripts", "orca-worktree-archive.sh"), 0o755);
+    }
+  });
+
+  it("P2: treats Orca error envelopes, missing --all catalog, and --repo without Orca consistently without false status ok", async () => {
+    // 1. { ok: false, error: ... } envelope
+    const errEnvOut = await hooksAuditCommand(["--json"], {
+      resolve: () => okResolution(),
+      runOrcaRepoList: () =>
+        JSON.stringify({
+          id: "req-err",
+          ok: false,
+          error: "daemon offline 10.203.0.77 SYNTHETIC_SECRET_R1",
+        }),
+    });
+    expect(errEnvOut).not.toContain("10.203.0.77");
+    expect(errEnvOut).not.toContain("SYNTHETIC_SECRET_R1");
+    const parsedErrEnv = JSON.parse(errEnvOut) as {
+      hooksAudit: { status: string; reason?: string };
+    };
+    expect(parsedErrEnv.hooksAudit.status).toBe("error");
+    expect(parsedErrEnv.hooksAudit.reason).toBeDefined();
+
+    // 2. --all with missing catalog when Orca resolution succeeds
+    const cleanRepo = makeRepo("orca-only-repo", {
+      orcaYaml: [
+        "scripts:",
+        '  setup: "bash scripts/orca-worktree-setup.sh"',
+        '  archive: "bash scripts/orca-worktree-archive.sh"',
+      ].join("\n"),
+      setupScript: "#!/bin/sh\necho setup\n",
+      archiveScript: "#!/bin/sh\necho archive\n",
+    });
+    const missingCatalogOut = await hooksAuditCommand(["--all", "--json"], {
+      resolve: () => okResolution(),
+      runOrcaRepoList: () =>
+        orcaRepoListJson([{ displayName: "orca-only-repo", path: cleanRepo }]),
+      loadCatalog: () => ({
+        status: "missing_catalog",
+        catalogPath: join(dir, "missing-catalog.json"),
+        catalog: null,
+      }),
+    });
+    const parsedMissingCat = JSON.parse(missingCatalogOut) as {
+      hooksAudit: { status: string; scope: string; catalogReason?: string };
+    };
+    expect(parsedMissingCat.hooksAudit.scope).toBe("all");
+    expect(parsedMissingCat.hooksAudit.status).not.toBe("ok");
+    expect(["degraded", "error"]).toContain(parsedMissingCat.hooksAudit.status);
+    expect(parsedMissingCat.hooksAudit.catalogReason).toBeDefined();
+
+    // 3. --repo <path> when Orca is unavailable: degraded top-level, clean on-disk repo
+    const explicitOut = await hooksAuditCommand(["--repo", cleanRepo, "--json"], {
+      resolve: errorResolution,
+    });
+    const parsedExplicit = JSON.parse(explicitOut) as {
+      hooksAudit: {
+        status: string;
+        scope: string;
+        orcaReason?: string;
+        repos: Array<{ status: string }>;
+      };
+    };
+    expect(parsedExplicit.hooksAudit.scope).toBe("repo");
+    expect(parsedExplicit.hooksAudit.status).toBe("degraded");
+    expect(parsedExplicit.hooksAudit.orcaReason).toBeDefined();
+    expect(parsedExplicit.hooksAudit.repos[0]?.status).toBe("clean");
+  });
+
+  it("P2: exits non-zero (1) on operational query/catalog failures while emitting structured JSON/TOON", async () => {
+    // 1. Fake Orca exiting 7 with secret on stderr
+    const failOrca = join(dir, "orca-fail-7");
+    writeFileSync(
+      failOrca,
+      [
+        "#!/bin/sh",
+        'if [ "$1" = "--version" ]; then echo "1.4.219"; exit 0; fi',
+        'if [ "$1" = "repo" ] && [ "$2" = "list" ]; then echo "SYNTHETIC_SECRET_R1 10.203.0.77" >&2; exit 7; fi',
+        "",
+      ].join("\n"),
+    );
+    chmodSync(failOrca, 0o755);
+    process.env.ORCA_CLI_COMMAND = failOrca;
+
+    const failRes = await runCli(["hooks-audit", "--json"]);
+    expect(failRes.exitCode).toBe(1);
+    expect(failRes.output).not.toContain("SYNTHETIC_SECRET_R1");
+    expect(failRes.output).not.toContain("10.203.0.77");
+    const parsedFail = JSON.parse(failRes.output) as { hooksAudit: { status: string } };
+    expect(parsedFail.hooksAudit.status).toBe("error");
+
+    // 2. Fake Orca emitting invalid JSON
+    const badJsonOrca = join(dir, "orca-bad-json");
+    writeFileSync(
+      badJsonOrca,
+      [
+        "#!/bin/sh",
+        'if [ "$1" = "--version" ]; then echo "1.4.219"; exit 0; fi',
+        'if [ "$1" = "repo" ] && [ "$2" = "list" ]; then echo "not json {"; exit 0; fi',
+        "",
+      ].join("\n"),
+    );
+    chmodSync(badJsonOrca, 0o755);
+    process.env.ORCA_CLI_COMMAND = badJsonOrca;
+
+    const badJsonRes = await runCli(["hooks-audit", "--json"]);
+    expect(badJsonRes.exitCode).toBe(1);
+    const parsedBadJson = JSON.parse(badJsonRes.output) as { hooksAudit: { status: string } };
+    expect(parsedBadJson.hooksAudit.status).toBe("error");
+
+    // 3. --all with missing catalog exits 1
+    process.env.ORCA_CLI_COMMAND = fakeOrca("1.4.219");
+    process.env.ORCA_AXI_HOME = join(dir, "empty-home");
+    const missingCatCli = await runCli(["hooks-audit", "--all", "--json"]);
+    expect(missingCatCli.exitCode).toBe(1);
+    const parsedMissingCli = JSON.parse(missingCatCli.output) as {
+      hooksAudit: { status: string };
+    };
+    expect(parsedMissingCli.hooksAudit.status).not.toBe("ok");
   });
 });

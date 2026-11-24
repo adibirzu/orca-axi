@@ -113,8 +113,8 @@ ${HOOKS_AUDIT_HELP}\`\`\`
 ## Exit codes
 
 \`\`\`
-0  success (including idempotent no-ops and doctor diagnostics)
-1  error: unexpected failure
+0  success (including idempotent no-ops, doctor diagnostics, and screen-reader refusal)
+1  error: unexpected failure or hooks-audit operational query/catalog failure
 2  usage error: unknown flag, unknown command, bad update option
 \`\`\`
 

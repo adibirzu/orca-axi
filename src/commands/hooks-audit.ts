@@ -5,9 +5,10 @@
  * `ORCA_CLI_COMMAND` semantics, queries `orca repo list --json` (and
  * optionally `~/.config/orca-axi/portfolio-catalog.json` with `--all`), and
  * inspects on-disk `orca.yaml` and `scripts/orca-worktree-*.sh` files using
- * symlink-safe / `O_NOFOLLOW` reads. Never mutates repo files or Orca UI/DB
- * settings and never emits `.env` values, secrets, private IPs, or personal
- * home identifiers.
+ * symlink-safe / hardlink-safe / `O_NOFOLLOW` reads. Never mutates repo files
+ * or Orca UI/DB settings and enforces one output-boundary redaction policy
+ * across both JSON and TOON outputs so `.env` values, secrets, private IPs,
+ * and personal home identifiers are never emitted.
  */
 
 import { execFileSync } from "node:child_process";
@@ -28,6 +29,7 @@ import { AxiError } from "axi-sdk-js";
 
 import { parseArgs, type FlagSpec } from "../args.js";
 import { resolveOrca, type OrcaResolution } from "../orca-resolve.js";
+import { MAX_ORCA_YAML_BYTES, parseOrcaYaml, type ParsedOrcaYaml } from "../orca-yaml.js";
 import {
   loadPortfolioCatalog,
   type CatalogLoadResult,
@@ -35,8 +37,23 @@ import {
 } from "../portfolio/catalog.js";
 import { collapseHome, helpBlock, toon } from "../render.js";
 
-const MAX_AUDIT_FILE_BYTES = 256 * 1024;
+export { parseOrcaYaml };
+
+const MAX_AUDIT_FILE_BYTES = MAX_ORCA_YAML_BYTES;
 const O_NOFOLLOW = fsConstants.O_NOFOLLOW ?? 0;
+
+const ALLOWED_COMMAND_SOURCE_POLICIES = new Set([
+  "local-only",
+  "repo-only",
+  "prefer-repo",
+  "prefer-local",
+  "repo-first",
+  "local-first",
+  "orca-yaml",
+  "merged",
+  "auto",
+  "default",
+]);
 
 const HOOKS_AUDIT_FLAGS: FlagSpec[] = [
   { name: "--repo", value: "path", description: "Audit a single repository path" },
@@ -54,17 +71,20 @@ description:
   with --repo <path>). Resolves the Orca binary first (preserving the
   GNOME screen-reader guard), queries \`orca repo list --json\`, and
   safely inspects on-disk orca.yaml and scripts/orca-worktree-*.sh using
-  O_NOFOLLOW reads without ever mutating repo files or Orca settings.
+  O_NOFOLLOW and st_nlink == 1 reads without mutating repo files or Orca settings.
 findings:
   missing_orca_yaml     checked-in orca.yaml is absent
   local_only_override   Orca commandSourcePolicy is local-only (bypasses orca.yaml)
   missing_archive_hook  archive hook missing in orca.yaml or script missing on disk
   unsafe_shared_dirs    sharedDirectories includes .venv, node_modules, .next, target, or caches
   missing_setup_script  orca.yaml references a setup script that does not exist on disk
-  unsafe_symlink        hook file or scripts/ is a symlink, special file, or escapes repo root
+  unsafe_symlink        hook file or scripts/ is a symlink, hardlink, special file, or escapes repo root
   invalid_orca_yaml     orca.yaml could not be parsed as a valid YAML mapping
   missing_repo_dir      registered/catalog repo directory does not exist on disk
+  unreadable_hook       referenced or discovered hook script could not be read
+  oversized_hook        hook script exceeds the 256 KiB inspection limit
 outputs:
+  status: ok | degraded | refused | error (exit 0 on ok/refused or --repo fallback; exit 1 on query/catalog failure; exit 2 on CLI usage error)
   TOON summary: status, scope, summary{}, repos[]
   --json  machine-readable {hooksAudit: ...} envelope
 flags[${HOOKS_AUDIT_FLAGS.length + 1}]:
@@ -77,6 +97,7 @@ examples:
 `;
 
 export type HooksAuditScope = "registered" | "all" | "repo";
+export type HooksAuditStatus = "ok" | "degraded" | "refused" | "error";
 
 export type HooksAuditFindingCode =
   | "missing_orca_yaml"
@@ -88,7 +109,9 @@ export type HooksAuditFindingCode =
   | "unsafe_symlink"
   | "missing_repo_dir"
   | "hardcoded_home_path"
-  | "empty_hook_script";
+  | "empty_hook_script"
+  | "unreadable_hook"
+  | "oversized_hook";
 
 export interface HooksAuditFinding {
   readonly code: HooksAuditFindingCode;
@@ -124,6 +147,8 @@ export interface HooksAuditByCode {
   readonly missing_repo_dir: number;
   readonly hardcoded_home_path: number;
   readonly empty_hook_script: number;
+  readonly unreadable_hook: number;
+  readonly oversized_hook: number;
 }
 
 export interface HooksAuditSummary {
@@ -140,6 +165,7 @@ export interface HooksAuditDeps {
   resolve?: () => OrcaResolution;
   runOrcaRepoList?: (orcaBin: string) => string;
   loadCatalog?: (options?: LoadCatalogOptions) => CatalogLoadResult;
+  setExitCode?: (code: number) => void;
   cwd?: string;
   homeDir?: string;
 }
@@ -159,12 +185,6 @@ interface AuditTarget {
   readonly orcaMeta?: OrcaRegisteredRepo;
 }
 
-interface ParsedOrcaYaml {
-  readonly setupCommand: string | null;
-  readonly archiveCommand: string | null;
-  readonly sharedDirectories: readonly string[];
-}
-
 type SafeReadResult =
   | { readonly status: "ok"; readonly content: string }
   | { readonly status: "missing" }
@@ -182,6 +202,8 @@ const ALL_FINDING_CODES: readonly HooksAuditFindingCode[] = [
   "missing_repo_dir",
   "hardcoded_home_path",
   "empty_hook_script",
+  "unreadable_hook",
+  "oversized_hook",
 ];
 
 const UNSAFE_SHARED_DIR_NAMES = new Set([
@@ -229,16 +251,125 @@ function normalizePathKey(rawPath: string): string {
   }
 }
 
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function redactPath(rawPath: string, effectiveHome: string): string {
   const collapsed = collapseHome(rawPath, effectiveHome);
   return collapsed.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, "~");
 }
 
-function sanitizeSafeToken(token: string): string {
-  return token
-    .replace(/\/(?:Users|home)\/[^/\s]+/g, "~")
+function stripControlChars(raw: string): string {
+  let out = "";
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i] ?? "";
+    const code = ch.charCodeAt(0);
+    if (code === 0x0d) {
+      if (raw.charCodeAt(i + 1) === 0x0a) i++;
+      out += " ";
+    } else if (code === 0x0a) {
+      out += " ";
+    } else if ((code >= 0x20 && code !== 0x7f) || code === 0x09) {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+/**
+ * Single uniform output-boundary redactor applied to all externally sourced
+ * strings across both JSON and TOON outputs (idempotent across repeated calls).
+ */
+function redactOutputText(raw: string, effectiveHome: string): string {
+  let out = stripControlChars(raw);
+
+  if (effectiveHome && effectiveHome !== "/") {
+    const homePattern = new RegExp(
+      `(^|[\\s"'=:(])${escapeRegExp(effectiveHome)}(?=$|[\\s/"':;,)])`,
+      "g",
+    );
+    out = out.replace(homePattern, "$1~");
+  }
+
+  return out
+    .replace(/\/(?:Users|home)\/[^/\s"';:)]+/g, "~")
+    .replace(/(https?:\/\/)[^/\s@]+@/gi, "$1<redacted>@")
     .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, "<redacted-ip>")
-    .replace(/[A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)/g, "<redacted-kv>");
+    .replace(/[A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)/g, "<redacted-kv>")
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1<redacted-secret>")
+    .replace(/((?:--?(?:api[-_]?key|token|secret|password|passwd|auth))[=\s]+)\S+/gi, "$1<redacted-secret>")
+    .replace(
+      /\b(?:sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{8,}|gho_[A-Za-z0-9]{8,}|ghu_[A-Za-z0-9]{8,}|ghs_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|pcp_[A-Za-z0-9_-]{8,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]+)?)\b/g,
+      "<redacted-secret>",
+    )
+    .replace(
+      /(?<!<)\b(?!(?:redacted-(?:ip|kv|secret|policy|version))\b)[A-Za-z0-9_-]*(?:secret|token|password|passwd|api[-_]?key|credential)[A-Za-z0-9_-]*\b(?!>)/gi,
+      "<redacted-secret>",
+    );
+}
+
+function sanitizeCommandSourcePolicy(raw: string | null): string | null {
+  if (raw === null) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return ALLOWED_COMMAND_SOURCE_POLICIES.has(trimmed) ? trimmed : "<redacted-policy>";
+}
+
+function extractSafeVersionToken(rawVersion: string, effectiveHome: string): string {
+  const redacted = redactOutputText(rawVersion, effectiveHome).trim();
+  if (redacted === "unprobed") return "unprobed";
+  const match = /(?:^|\s)(v?\d+\.\d+(?:\.\d+)?)(?=$|\s)/.exec(redacted);
+  return match?.[1] ?? "<redacted-version>";
+}
+
+function sanitizeRefusalReason(reason: string | undefined, effectiveHome: string): string {
+  if (!reason) {
+    return "Refused to invoke candidate binary as the Orca runtime.";
+  }
+  const strippedVersion = reason.replace(
+    /(\bGNOME screen reader\s*\()([^)]+)(\))|(\bResolved\s+\S+\s*\()([^)]+)(\)\s+is the GNOME screen reader)/gi,
+    (
+      _full,
+      p1?: string,
+      v1?: string,
+      p3?: string,
+      p4?: string,
+      v2?: string,
+      p6?: string,
+    ) => {
+      if (p1 && v1 !== undefined && p3) {
+        return `${p1}${extractSafeVersionToken(v1, effectiveHome)}${p3}`;
+      }
+      if (p4 && v2 !== undefined && p6) {
+        return `${p4}${extractSafeVersionToken(v2, effectiveHome)}${p6}`;
+      }
+      return _full;
+    },
+  );
+  return redactOutputText(strippedVersion, effectiveHome);
+}
+
+function sanitizePayloadValue<T>(value: T, effectiveHome: string): T {
+  if (typeof value === "string") {
+    return redactOutputText(value, effectiveHome) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizePayloadValue(item, effectiveHome)) as unknown as T;
+  }
+  if (typeof value === "object" && value !== null) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (v === undefined) continue;
+      if (k === "commandSourcePolicy" && typeof v === "string") {
+        out[k] = sanitizeCommandSourcePolicy(v);
+      } else {
+        out[k] = sanitizePayloadValue(v, effectiveHome);
+      }
+    }
+    return out as T;
+  }
+  return value;
 }
 
 function isEnvPath(relPath: string): boolean {
@@ -312,6 +443,9 @@ function safeReadRepoFile(repoRoot: string, relPath: string): SafeReadResult {
     if (!st.isFile()) {
       return { status: "unsafe", reason: "special_file" };
     }
+    if (st.nlink !== 1) {
+      return { status: "unsafe", reason: "hardlink" };
+    }
     if (st.size > MAX_AUDIT_FILE_BYTES) {
       return { status: "error", reason: "file_too_large" };
     }
@@ -334,8 +468,9 @@ function safeReadRepoFile(repoRoot: string, relPath: string): SafeReadResult {
 }
 
 function listOrcaWorktreeScripts(repoRoot: string): {
-  readonly status: "ok" | "missing" | "unsafe";
+  readonly status: "ok" | "missing" | "unsafe" | "error";
   readonly files: readonly string[];
+  readonly reason?: string;
 } {
   const scriptsDir = join(repoRoot, "scripts");
   let st: ReturnType<typeof lstatSync>;
@@ -344,7 +479,7 @@ function listOrcaWorktreeScripts(repoRoot: string): {
   } catch (err) {
     const code = (err as NodeJS.ErrnoException | undefined)?.code;
     if (code === "ENOENT") return { status: "missing", files: [] };
-    return { status: "unsafe", files: [] };
+    return { status: "error", files: [], reason: code ?? "stat_failed" };
   }
   if (st.isSymbolicLink() || !st.isDirectory()) {
     return { status: "unsafe", files: [] };
@@ -354,208 +489,10 @@ function listOrcaWorktreeScripts(repoRoot: string): {
       .filter((name) => /^orca-worktree-.*\.sh$/.test(name))
       .sort();
     return { status: "ok", files: entries.map((name) => `scripts/${name}`) };
-  } catch {
-    return { status: "missing", files: [] };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    return { status: "error", files: [], reason: code ?? "readdir_failed" };
   }
-}
-
-function stripYamlComment(line: string): string {
-  let inSingle = false;
-  let inDouble = false;
-  let escaped = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (inDouble && ch === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (!inDouble && ch === "'") {
-      inSingle = !inSingle;
-      continue;
-    }
-    if (!inSingle && ch === '"') {
-      inDouble = !inDouble;
-      continue;
-    }
-    if (!inSingle && !inDouble && ch === "#" && (i === 0 || /\s/.test(line[i - 1] ?? ""))) {
-      return line.slice(0, i);
-    }
-  }
-  return line;
-}
-
-function parseYamlScalar(raw: string): { ok: true; value: string } | { ok: false } {
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed === "null" || trimmed === "~") {
-    return { ok: true, value: "" };
-  }
-  if (trimmed.startsWith('"')) {
-    if (trimmed.length < 2 || !trimmed.endsWith('"')) return { ok: false };
-    try {
-      return { ok: true, value: JSON.parse(trimmed) as string };
-    } catch {
-      return { ok: true, value: trimmed.slice(1, -1) };
-    }
-  }
-  if (trimmed.startsWith("'")) {
-    if (trimmed.length < 2 || !trimmed.endsWith("'")) return { ok: false };
-    return { ok: true, value: trimmed.slice(1, -1).replace(/''/g, "'") };
-  }
-  return { ok: true, value: trimmed };
-}
-
-function parseInlineYamlArray(raw: string): string[] | null {
-  const trimmed = raw.trim();
-  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return null;
-  const inner = trimmed.slice(1, -1).trim();
-  if (!inner) return [];
-  const items: string[] = [];
-  let current = "";
-  let inSingle = false;
-  let inDouble = false;
-  let escaped = false;
-  for (let i = 0; i < inner.length; i++) {
-    const ch = inner[i] ?? "";
-    if (escaped) {
-      current += ch;
-      escaped = false;
-      continue;
-    }
-    if (inDouble && ch === "\\") {
-      current += ch;
-      escaped = true;
-      continue;
-    }
-    if (!inDouble && ch === "'") {
-      inSingle = !inSingle;
-      current += ch;
-      continue;
-    }
-    if (!inSingle && ch === '"') {
-      inDouble = !inDouble;
-      current += ch;
-      continue;
-    }
-    if (!inSingle && !inDouble && ch === ",") {
-      const parsed = parseYamlScalar(current);
-      if (!parsed.ok) return null;
-      if (parsed.value) items.push(parsed.value);
-      current = "";
-      continue;
-    }
-    current += ch;
-  }
-  if (inSingle || inDouble) return null;
-  const last = parseYamlScalar(current);
-  if (!last.ok) return null;
-  if (last.value) items.push(last.value);
-  return items;
-}
-
-export function parseOrcaYaml(raw: string): ParsedOrcaYaml | null {
-  const lines = raw.split(/\r?\n/);
-  let setupCommand: string | null = null;
-  let archiveCommand: string | null = null;
-  const sharedDirectories: string[] = [];
-
-  let activeSection: "scripts" | "sharedDirectories" | "other" | null = null;
-  let sectionIndent = 0;
-  let hasAnyKey = false;
-
-  for (const rawLine of lines) {
-    const withoutComment = stripYamlComment(rawLine);
-    if (!withoutComment.trim()) continue;
-
-    const indent = withoutComment.length - withoutComment.trimStart().length;
-    const trimmed = withoutComment.trim();
-
-    if (indent === 0) {
-      activeSection = null;
-      sectionIndent = 0;
-      if (trimmed.startsWith("-")) {
-        return null;
-      }
-      const colonIdx = trimmed.indexOf(":");
-      if (colonIdx <= 0) {
-        return null;
-      }
-      const key = trimmed.slice(0, colonIdx).trim();
-      const rest = trimmed.slice(colonIdx + 1).trim();
-      hasAnyKey = true;
-
-      if (key === "scripts") {
-        if (!rest) {
-          activeSection = "scripts";
-        } else if (rest !== "{}") {
-          return null;
-        }
-      } else if (key === "sharedDirectories" || key === "shared_directories") {
-        if (!rest) {
-          activeSection = "sharedDirectories";
-        } else {
-          const arr = parseInlineYamlArray(rest);
-          if (!arr) return null;
-          sharedDirectories.push(...arr);
-        }
-      } else if (!rest) {
-        activeSection = "other";
-      } else {
-        const scalar = parseYamlScalar(rest);
-        if (!scalar.ok) return null;
-      }
-      continue;
-    }
-
-    if (!activeSection) {
-      return null;
-    }
-    if (sectionIndent === 0) {
-      sectionIndent = indent;
-    }
-
-    if (activeSection === "sharedDirectories") {
-      if (trimmed.startsWith("-")) {
-        const itemRaw = trimmed.slice(1).trim();
-        const scalar = parseYamlScalar(itemRaw);
-        if (!scalar.ok) return null;
-        if (scalar.value) sharedDirectories.push(scalar.value);
-      } else if (indent < sectionIndent) {
-        return null;
-      }
-      continue;
-    }
-
-    if (activeSection === "scripts") {
-      if (trimmed.startsWith("-")) {
-        return null;
-      }
-      const colonIdx = trimmed.indexOf(":");
-      if (colonIdx <= 0) {
-        return null;
-      }
-      const subKey = trimmed.slice(0, colonIdx).trim();
-      const rest = trimmed.slice(colonIdx + 1).trim();
-      const scalar = parseYamlScalar(rest);
-      if (!scalar.ok) return null;
-      if (subKey === "setup") {
-        setupCommand = scalar.value || null;
-      } else if (subKey === "archive") {
-        archiveCommand = scalar.value || null;
-      }
-    }
-  }
-
-  return hasAnyKey
-    ? {
-        setupCommand,
-        archiveCommand,
-        sharedDirectories,
-      }
-    : null;
 }
 
 function extractReferencedScripts(command: string | null): string[] {
@@ -570,7 +507,12 @@ function extractReferencedScripts(command: string | null): string[] {
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i] ?? "";
     const prev = i > 0 ? tokens[i - 1] : undefined;
-    if (tok.startsWith("-") || tok.includes("://") || tok === "/dev/null") {
+    if (
+      tok.startsWith("-") ||
+      tok.includes("://") ||
+      tok === "/dev/null" ||
+      /[*?]/.test(tok)
+    ) {
       continue;
     }
     if (tok.includes("=") && !tok.startsWith("./") && !tok.startsWith("../")) {
@@ -622,49 +564,62 @@ function hasHardcodedHomePath(content: string): boolean {
   return /(?:^|[\s"'=:])\/(?:Users|home)\/[A-Za-z0-9._-]+(?=\/|$|[\s"';:])/.test(content);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function extractEnvelopeError(parsed: Record<string, unknown>): string {
+  const err = parsed.error;
+  if (typeof err === "string" && err.trim()) return err.trim();
+  if (isRecord(err) && typeof err.message === "string" && err.message.trim()) {
+    return err.message.trim();
+  }
+  return "Orca CLI returned an error envelope";
+}
+
 function parseOrcaRepoList(raw: string): OrcaRegisteredRepo[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new AxiError("`orca repo list --json` did not emit valid JSON", "VALIDATION_ERROR", [
+    throw new AxiError("`orca repo list --json` did not emit valid JSON", "RUNTIME_ERROR", [
       "Run `orca repo list --json` directly to verify the Orca CLI output",
     ]);
   }
-  if (typeof parsed !== "object" || parsed === null) {
-    return [];
+  if (!isRecord(parsed)) {
+    throw new AxiError("`orca repo list --json` returned an unexpected response shape", "RUNTIME_ERROR", [
+      "Run `orca repo list --json` directly to verify the Orca CLI output",
+    ]);
   }
-  const result = (parsed as { result?: unknown }).result;
-  const rawRepos =
-    typeof result === "object" && result !== null
-      ? (result as { repos?: unknown }).repos
-      : undefined;
-  if (!Array.isArray(rawRepos)) {
-    return [];
+  if (parsed.ok === false) {
+    throw new AxiError(
+      `\`orca repo list --json\` failed: ${extractEnvelopeError(parsed)}`,
+      "RUNTIME_ERROR",
+      ["Ensure the Orca runtime daemon is running and `orca repo list --json` succeeds"],
+    );
+  }
+  if (parsed.ok !== true || !isRecord(parsed.result) || !Array.isArray(parsed.result.repos)) {
+    throw new AxiError("`orca repo list --json` returned an unexpected response shape", "RUNTIME_ERROR", [
+      "Run `orca repo list --json` directly to verify the Orca CLI output",
+    ]);
   }
 
   const out: OrcaRegisteredRepo[] = [];
-  for (const item of rawRepos) {
-    if (typeof item !== "object" || item === null) continue;
-    const rec = item as Record<string, unknown>;
-    const path = typeof rec.path === "string" ? rec.path.trim() : "";
+  for (const item of parsed.result.repos) {
+    if (!isRecord(item)) continue;
+    const path = typeof item.path === "string" ? item.path.trim() : "";
     if (!path) continue;
     const displayName =
-      typeof rec.displayName === "string" && rec.displayName.trim()
-        ? rec.displayName.trim()
+      typeof item.displayName === "string" && item.displayName.trim()
+        ? item.displayName.trim()
         : basename(path);
-    const hookSettings =
-      typeof rec.hookSettings === "object" && rec.hookSettings !== null
-        ? (rec.hookSettings as Record<string, unknown>)
-        : null;
-    const commandSourcePolicy =
+    const hookSettings = isRecord(item.hookSettings) ? item.hookSettings : null;
+    const rawPolicy =
       hookSettings && typeof hookSettings.commandSourcePolicy === "string"
         ? hookSettings.commandSourcePolicy.trim()
         : null;
-    const scripts =
-      hookSettings && typeof hookSettings.scripts === "object" && hookSettings.scripts !== null
-        ? (hookSettings.scripts as Record<string, unknown>)
-        : null;
+    const commandSourcePolicy = sanitizeCommandSourcePolicy(rawPolicy);
+    const scripts = hookSettings && isRecord(hookSettings.scripts) ? hookSettings.scripts : null;
     const setupCmd = scripts && typeof scripts.setup === "string" ? scripts.setup.trim() : "";
     const archiveCmd =
       scripts && typeof scripts.archive === "string" ? scripts.archive.trim() : "";
@@ -700,6 +655,8 @@ function toByCodeRecord(counts: ReadonlyMap<HooksAuditFindingCode, number>): Hoo
     missing_repo_dir: counts.get("missing_repo_dir") ?? 0,
     hardcoded_home_path: counts.get("hardcoded_home_path") ?? 0,
     empty_hook_script: counts.get("empty_hook_script") ?? 0,
+    unreadable_hook: counts.get("unreadable_hook") ?? 0,
+    oversized_hook: counts.get("oversized_hook") ?? 0,
   };
 }
 
@@ -715,10 +672,53 @@ function emptySummary(): HooksAuditSummary {
   };
 }
 
+function pushScriptFailureFinding(
+  findings: HooksAuditFinding[],
+  relPath: string,
+  roleLabel: "setup" | "archive" | "discovered",
+  result: Extract<SafeReadResult, { readonly status: "unsafe" | "error" }>,
+  effectiveHome: string,
+): void {
+  const safeFile = redactOutputText(relPath, effectiveHome);
+  const safeReason = redactOutputText(result.reason, effectiveHome);
+  if (result.status === "unsafe") {
+    const subject =
+      roleLabel === "setup"
+        ? "unsafe setup script path"
+        : roleLabel === "archive"
+          ? "unsafe archive script path"
+          : "unsafe hook script";
+    findings.push({
+      code: "unsafe_symlink",
+      severity: "error",
+      file: safeFile,
+      message: `Refused ${subject} (${safeReason})`,
+    });
+    return;
+  }
+
+  if (result.reason === "file_too_large") {
+    findings.push({
+      code: "oversized_hook",
+      severity: "error",
+      file: safeFile,
+      message: `Hook script ${safeFile} exceeds ${MAX_AUDIT_FILE_BYTES} bytes (${safeReason})`,
+    });
+    return;
+  }
+
+  findings.push({
+    code: "unreadable_hook",
+    severity: "error",
+    file: safeFile,
+    message: `Unable to read hook script ${safeFile} (${safeReason})`,
+  });
+}
+
 function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRepoReport {
   const findings: HooksAuditFinding[] = [];
-  const redactedPath = redactPath(target.fsPath, effectiveHome);
-  const policy = target.orcaMeta?.commandSourcePolicy ?? null;
+  const redactedPath = redactOutputText(redactPath(target.fsPath, effectiveHome), effectiveHome);
+  const policy = sanitizeCommandSourcePolicy(target.orcaMeta?.commandSourcePolicy ?? null);
 
   if (policy === "local-only") {
     findings.push({
@@ -746,7 +746,7 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
       severity: "error",
       message: "Repository directory does not exist on disk",
     });
-    return buildRepoReport(target, redactedPath, policy, false, false, false, findings);
+    return buildRepoReport(target, redactedPath, policy, false, false, false, findings, effectiveHome);
   }
 
   if (repoStat.isSymbolicLink() || !repoStat.isDirectory()) {
@@ -755,7 +755,7 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
       severity: "error",
       message: "Repository root is a symlink or non-directory; refusing to inspect contents",
     });
-    return buildRepoReport(target, redactedPath, policy, false, false, false, findings);
+    return buildRepoReport(target, redactedPath, policy, false, false, false, findings, effectiveHome);
   }
 
   const yamlRead = safeReadRepoFile(target.fsPath, "orca.yaml");
@@ -774,14 +774,14 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
       code: "unsafe_symlink",
       severity: "error",
       file: "orca.yaml",
-      message: `Refused to read orca.yaml (${yamlRead.reason})`,
+      message: `Refused to read orca.yaml (${redactOutputText(yamlRead.reason, effectiveHome)})`,
     });
   } else if (yamlRead.status === "error") {
     findings.push({
       code: "invalid_orca_yaml",
       severity: "error",
       file: "orca.yaml",
-      message: `Unable to read orca.yaml (${yamlRead.reason})`,
+      message: `Unable to read orca.yaml (${redactOutputText(yamlRead.reason, effectiveHome)})`,
     });
   } else {
     orcaYamlPresent = true;
@@ -806,7 +806,7 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
   if (parsedYaml && parsedYaml.sharedDirectories.length > 0) {
     const unsafeDirs = parsedYaml.sharedDirectories
       .filter(isUnsafeSharedDirEntry)
-      .map(sanitizeSafeToken);
+      .map((d) => redactOutputText(d, effectiveHome));
     if (unsafeDirs.length > 0) {
       findings.push({
         code: "unsafe_shared_dirs",
@@ -825,6 +825,13 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
       severity: "error",
       file: "scripts",
       message: "scripts/ is a symlink or non-directory; refusing to traverse",
+    });
+  } else if (scriptsListing.status === "error") {
+    findings.push({
+      code: "unreadable_hook",
+      severity: "error",
+      file: "scripts",
+      message: `Unable to list scripts/ directory (${redactOutputText(scriptsListing.reason ?? "error", effectiveHome)})`,
     });
   }
 
@@ -854,22 +861,19 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
   );
 
   for (const ref of setupRefs) {
+    const safeRef = redactOutputText(ref, effectiveHome);
     const res = inspectScript(ref);
     if (res.status === "missing") {
       findings.push({
         code: "missing_setup_script",
         severity: "warning",
-        file: ref,
-        message: `Referenced setup script ${sanitizeSafeToken(ref)} does not exist on disk`,
+        file: safeRef,
+        message: `Referenced setup script ${safeRef} does not exist on disk`,
       });
       setupHookConfigured = false;
-    } else if (res.status === "unsafe") {
-      findings.push({
-        code: "unsafe_symlink",
-        severity: "error",
-        file: sanitizeSafeToken(ref),
-        message: `Refused unsafe setup script path (${res.reason})`,
-      });
+    } else if (res.status === "unsafe" || res.status === "error") {
+      pushScriptFailureFinding(findings, ref, "setup", res, effectiveHome);
+      setupHookConfigured = false;
     }
   }
 
@@ -885,31 +889,28 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
     archiveHookConfigured = false;
   } else {
     for (const ref of archiveRefs) {
+      const safeRef = redactOutputText(ref, effectiveHome);
       const res = inspectScript(ref);
       if (res.status === "missing") {
         findings.push({
           code: "missing_archive_hook",
           severity: "warning",
-          file: ref,
-          message: `Referenced archive hook script ${sanitizeSafeToken(ref)} does not exist on disk`,
+          file: safeRef,
+          message: `Referenced archive hook script ${safeRef} does not exist on disk`,
         });
         archiveMissingEmitted = true;
         archiveHookConfigured = false;
-      } else if (res.status === "unsafe") {
-        findings.push({
-          code: "unsafe_symlink",
-          severity: "error",
-          file: sanitizeSafeToken(ref),
-          message: `Refused unsafe archive script path (${res.reason})`,
-        });
+      } else if (res.status === "unsafe" || res.status === "error") {
+        pushScriptFailureFinding(findings, ref, "archive", res, effectiveHome);
+        archiveHookConfigured = false;
       }
     }
   }
 
-  const setupScriptOnDisk =
-    scriptReadCache.get("scripts/orca-worktree-setup.sh")?.status === "ok";
-  const archiveScriptOnDisk =
-    scriptReadCache.get("scripts/orca-worktree-archive.sh")?.status === "ok";
+  const setupScriptRes = scriptReadCache.get("scripts/orca-worktree-setup.sh");
+  const archiveScriptRes = scriptReadCache.get("scripts/orca-worktree-archive.sh");
+  const setupScriptOnDisk = setupScriptRes?.status === "ok";
+  const archiveScriptOnDisk = archiveScriptRes?.status === "ok";
 
   if (
     !orcaYamlPresent &&
@@ -929,27 +930,24 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
   for (const scriptPath of inspectedScripts) {
     const res = scriptReadCache.get(scriptPath);
     if (!res) continue;
-    if (res.status === "unsafe" && !setupRefs.includes(scriptPath) && !archiveRefs.includes(scriptPath)) {
-      findings.push({
-        code: "unsafe_symlink",
-        severity: "error",
-        file: sanitizeSafeToken(scriptPath),
-        message: `Refused unsafe hook script (${res.reason})`,
-      });
+    const alreadyHandledAsRef = setupRefs.includes(scriptPath) || archiveRefs.includes(scriptPath);
+    if ((res.status === "unsafe" || res.status === "error") && !alreadyHandledAsRef) {
+      pushScriptFailureFinding(findings, scriptPath, "discovered", res, effectiveHome);
     } else if (res.status === "ok") {
+      const safeScriptPath = redactOutputText(scriptPath, effectiveHome);
       if (res.content.trim().length === 0) {
         findings.push({
           code: "empty_hook_script",
           severity: "warning",
-          file: scriptPath,
-          message: `Hook script ${scriptPath} is empty`,
+          file: safeScriptPath,
+          message: `Hook script ${safeScriptPath} is empty`,
         });
       } else if (hasHardcodedHomePath(res.content)) {
         findings.push({
           code: "hardcoded_home_path",
           severity: "warning",
-          file: scriptPath,
-          message: `Hook script ${scriptPath} references a hardcoded user home directory path`,
+          file: safeScriptPath,
+          message: `Hook script ${safeScriptPath} references a hardcoded user home directory path`,
         });
       }
     }
@@ -963,6 +961,7 @@ function auditTargetRepo(target: AuditTarget, effectiveHome: string): AuditedRep
     setupHookConfigured,
     archiveHookConfigured,
     findings,
+    effectiveHome,
   );
 }
 
@@ -974,14 +973,15 @@ function buildRepoReport(
   setupHookConfigured: boolean,
   archiveHookConfigured: boolean,
   findings: readonly HooksAuditFinding[],
+  effectiveHome: string,
 ): AuditedRepoReport {
   const sourceOrder: RepoSource[] = ["orca", "portfolio", "explicit"];
   const sources = sourceOrder.filter((s) => target.sources.has(s));
   return {
-    name: target.name,
+    name: redactOutputText(target.name, effectiveHome),
     path: redactedPath,
     sources,
-    commandSourcePolicy,
+    commandSourcePolicy: sanitizeCommandSourcePolicy(commandSourcePolicy),
     orcaYamlPresent,
     setupHookConfigured,
     archiveHookConfigured,
@@ -1021,6 +1021,60 @@ function summarizeReports(reports: readonly AuditedRepoReport[]): HooksAuditSumm
   };
 }
 
+function renderHooksAuditOutput(
+  payload: Record<string, unknown>,
+  json: boolean,
+  toonHelpLines: readonly string[],
+  effectiveHome: string,
+): string {
+  const sanitizedPayload = sanitizePayloadValue(payload, effectiveHome);
+  if (json) {
+    return JSON.stringify({ hooksAudit: sanitizedPayload }, null, 2);
+  }
+
+  const sanitizedHelp = toonHelpLines.map((line) => redactOutputText(line, effectiveHome));
+  if ("repos" in sanitizedPayload && Array.isArray(sanitizedPayload.repos) && !("reason" in sanitizedPayload && (sanitizedPayload.status === "refused" || sanitizedPayload.status === "error"))) {
+    const reports = sanitizedPayload.repos as AuditedRepoReport[];
+    const summary = sanitizedPayload.summary as HooksAuditSummary;
+    const activeCodeCounts = Object.fromEntries(
+      Object.entries(summary.byCode).filter(([, count]) => count > 0),
+    );
+    const compactView = {
+      hooksAudit: {
+        status: sanitizedPayload.status,
+        platform: sanitizedPayload.platform,
+        scope: sanitizedPayload.scope,
+        ...(typeof sanitizedPayload.reason === "string" ? { reason: sanitizedPayload.reason } : {}),
+        ...(typeof sanitizedPayload.orcaReason === "string"
+          ? { orcaReason: sanitizedPayload.orcaReason }
+          : {}),
+        ...(typeof sanitizedPayload.catalogReason === "string"
+          ? { catalogReason: sanitizedPayload.catalogReason }
+          : {}),
+        summary: {
+          totalRepos: summary.totalRepos,
+          cleanRepos: summary.cleanRepos,
+          driftRepos: summary.driftRepos,
+          totalFindings: summary.totalFindings,
+          errors: summary.errors,
+          warnings: summary.warnings,
+          ...activeCodeCounts,
+        },
+        repos: reports.map((r) => ({
+          name: r.name,
+          status: r.status,
+          policy: r.commandSourcePolicy ?? "-",
+          findings: r.findings.map((f) => f.code).join(",") || "-",
+          path: r.path,
+        })),
+      },
+    };
+    return toon(compactView, helpBlock(sanitizedHelp));
+  }
+
+  return toon({ hooksAudit: sanitizedPayload }, helpBlock(sanitizedHelp));
+}
+
 export async function hooksAuditCommand(
   args: string[],
   deps: HooksAuditDeps = {},
@@ -1043,27 +1097,34 @@ export async function hooksAuditCommand(
   const scope: HooksAuditScope = rawRepo !== undefined ? "repo" : all ? "all" : "registered";
   const effectiveHome = deps.homeDir ?? process.env.ORCA_AXI_HOME?.trim() ?? homedir();
   const cwd = deps.cwd ?? process.cwd();
+  const setExitCode = deps.setExitCode ?? ((code: number) => {
+    process.exitCode = code;
+  });
 
   const resolution = (deps.resolve ?? resolveOrca)();
   if (resolution.status === "refused") {
-    const payload = {
-      status: "refused" as const,
-      platform: resolution.platform,
-      scope,
-      reason: resolution.reason,
-      suggestions: resolution.suggestions,
-      summary: emptySummary(),
-      repos: [],
-    };
-    if (json) {
-      return JSON.stringify({ hooksAudit: payload }, null, 2);
-    }
-    return toon({ hooksAudit: payload }, helpBlock(resolution.suggestions));
+    return renderHooksAuditOutput(
+      {
+        status: "refused",
+        platform: resolution.platform,
+        scope,
+        reason: sanitizeRefusalReason(resolution.reason, effectiveHome),
+        suggestions: resolution.suggestions,
+        summary: emptySummary(),
+        repos: [],
+      },
+      json,
+      resolution.suggestions,
+      effectiveHome,
+    );
   }
 
   let orcaRepos: OrcaRegisteredRepo[] = [];
   let orcaErrorReason: string | undefined =
-    resolution.status !== "ok" ? resolution.reason : undefined;
+    resolution.status !== "ok"
+      ? resolution.reason ?? "No Orca terminal/session runtime binary was found."
+      : undefined;
+
   if (resolution.status === "ok" && resolution.binary) {
     try {
       const rawList = (deps.runOrcaRepoList ?? defaultRunOrcaRepoList)(resolution.binary.path);
@@ -1073,39 +1134,32 @@ export async function hooksAuditCommand(
         err instanceof AxiError
           ? err.message
           : "Failed to query `orca repo list --json`";
-      if (scope === "registered") {
-        const payload = {
-          status: "error" as const,
-          platform: resolution.platform,
-          scope,
-          reason: orcaErrorReason,
-          suggestions: [
+    }
+  }
+
+  if (scope === "registered" && orcaErrorReason) {
+    setExitCode(1);
+    const suggestions =
+      resolution.status === "ok"
+        ? [
             "Ensure the Orca runtime daemon is running and `orca repo list --json` succeeds",
             "Or pass `--repo <path>` / `--all` to audit on-disk repositories",
-          ],
-          summary: emptySummary(),
-          repos: [],
-        };
-        if (json) {
-          return JSON.stringify({ hooksAudit: payload }, null, 2);
-        }
-        return toon({ hooksAudit: payload }, helpBlock(payload.suggestions));
-      }
-    }
-  } else if (scope === "registered") {
-    const payload = {
-      status: "error" as const,
-      platform: resolution.platform,
-      scope,
-      reason: resolution.reason ?? "No Orca terminal/session runtime binary was found.",
-      suggestions: resolution.suggestions,
-      summary: emptySummary(),
-      repos: [],
-    };
-    if (json) {
-      return JSON.stringify({ hooksAudit: payload }, null, 2);
-    }
-    return toon({ hooksAudit: payload }, helpBlock(resolution.suggestions));
+          ]
+        : resolution.suggestions;
+    return renderHooksAuditOutput(
+      {
+        status: "error",
+        platform: resolution.platform,
+        scope,
+        reason: orcaErrorReason,
+        suggestions,
+        summary: emptySummary(),
+        repos: [],
+      },
+      json,
+      suggestions,
+      effectiveHome,
+    );
   }
 
   const orcaByKey = new Map<string, OrcaRegisteredRepo>();
@@ -1114,6 +1168,8 @@ export async function hooksAuditCommand(
   }
 
   const targetsByKey = new Map<string, AuditTarget>();
+  let catalogErrorReason: string | undefined;
+
   if (rawRepo !== undefined) {
     const absRepo = resolve(cwd, rawRepo);
     let st: ReturnType<typeof lstatSync> | null;
@@ -1164,23 +1220,36 @@ export async function hooksAuditCommand(
             });
           }
         }
-      } else if (resolution.status !== "ok") {
-        const payload = {
-          status: "error" as const,
-          platform: resolution.platform,
-          scope,
-          reason:
-            resolution.reason ??
-            catalogResult.error ??
-            "Neither Orca CLI nor portfolio catalog is available.",
-          suggestions: resolution.suggestions,
-          summary: emptySummary(),
-          repos: [],
-        };
-        if (json) {
-          return JSON.stringify({ hooksAudit: payload }, null, 2);
-        }
-        return toon({ hooksAudit: payload }, helpBlock(resolution.suggestions));
+      } else {
+        catalogErrorReason =
+          catalogResult.error ??
+          (catalogResult.status === "missing_catalog"
+            ? "Portfolio catalog file is missing"
+            : "Portfolio catalog file is invalid");
+      }
+
+      if (orcaErrorReason && catalogErrorReason) {
+        setExitCode(1);
+        const suggestions = [
+          ...resolution.suggestions,
+          "Run `orca-axi portfolio` to verify ~/.config/orca-axi/portfolio-catalog.json",
+        ];
+        return renderHooksAuditOutput(
+          {
+            status: "error",
+            platform: resolution.platform,
+            scope,
+            reason: `${orcaErrorReason}; ${catalogErrorReason}`,
+            orcaReason: orcaErrorReason,
+            catalogReason: catalogErrorReason,
+            suggestions,
+            summary: emptySummary(),
+            repos: [],
+          },
+          json,
+          suggestions,
+          effectiveHome,
+        );
       }
     }
   }
@@ -1191,56 +1260,34 @@ export async function hooksAuditCommand(
   const reports = orderedTargets.map((t) => auditTargetRepo(t, effectiveHome));
   const summary = summarizeReports(reports);
 
-  if (json) {
-    return JSON.stringify(
-      {
-        hooksAudit: {
-          status: resolution.status,
-          platform: resolution.platform,
-          scope,
-          ...(orcaErrorReason ? { orcaReason: orcaErrorReason } : {}),
-          summary,
-          repos: reports,
-        },
-      },
-      null,
-      2,
-    );
+  let topStatus: HooksAuditStatus = "ok";
+  let topReason: string | undefined;
+
+  if (scope === "all" && (orcaErrorReason || catalogErrorReason)) {
+    topStatus = "degraded";
+    topReason = [orcaErrorReason, catalogErrorReason].filter(Boolean).join("; ");
+    setExitCode(1);
+  } else if (scope === "repo" && orcaErrorReason) {
+    topStatus = "degraded";
+    topReason = orcaErrorReason;
   }
 
-  const activeCodeCounts = Object.fromEntries(
-    Object.entries(summary.byCode).filter(([, count]) => count > 0),
-  );
-
-  const compactView = {
-    hooksAudit: {
-      status: resolution.status,
+  return renderHooksAuditOutput(
+    {
+      status: topStatus,
       platform: resolution.platform,
       scope,
-      summary: {
-        totalRepos: summary.totalRepos,
-        cleanRepos: summary.cleanRepos,
-        driftRepos: summary.driftRepos,
-        totalFindings: summary.totalFindings,
-        errors: summary.errors,
-        warnings: summary.warnings,
-        ...activeCodeCounts,
-      },
-      repos: reports.map((r) => ({
-        name: r.name,
-        status: r.status,
-        policy: r.commandSourcePolicy ?? "-",
-        findings: r.findings.map((f) => f.code).join(",") || "-",
-        path: r.path,
-      })),
+      ...(topReason ? { reason: topReason } : {}),
+      ...(orcaErrorReason ? { orcaReason: orcaErrorReason } : {}),
+      ...(catalogErrorReason ? { catalogReason: catalogErrorReason } : {}),
+      summary,
+      repos: reports,
     },
-  };
-
-  return toon(
-    compactView,
-    helpBlock([
+    json,
+    [
       "Run `orca-axi hooks-audit --json` for structured findings and per-file details",
       "Run `orca-axi hooks-audit --all` to include portfolio-catalog.json repositories",
-    ]),
+    ],
+    effectiveHome,
   );
 }
