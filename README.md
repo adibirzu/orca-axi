@@ -35,8 +35,25 @@ orca-axi doctor --full                        # every candidate path tried
 orca-axi doctor --json
 orca-axi mirror --from snapshot.json          # read-only Firstmate fleet cards
 orca-axi mirror --from snapshot.json --json   # machine-readable cards
+orca-axi hooks-audit [--repo <path>] [--all] [--json]  # read-only worktree hook drift audit
 orca-axi update --check                       # current vs latest, no install
 ```
+
+`hooks-audit` resolves the Orca binary first (preserving the GNOME
+screen-reader guard), queries `orca repo list --json` (plus
+`~/.config/orca-axi/portfolio-catalog.json` when `--all` is passed, or a
+single repository with `--repo <path>`), and performs symlink-safe /
+hardlink-safe (`st_nlink == 1`) / `O_NOFOLLOW` read-only inspection of
+`orca.yaml` and `scripts/orca-worktree-*.sh`. It reports standardized drift
+findings (`missing_orca_yaml`, `invalid_orca_yaml`, `local_only_override`,
+`missing_archive_hook`, `missing_setup_script`, `unsafe_shared_dirs`,
+`unsafe_symlink`, `unreadable_hook`, `oversized_hook`, `empty_hook_script`,
+`hardcoded_home_path`, `missing_repo_dir`) without ever mutating repository
+files or Orca settings, and without leaking `.env` values, secrets, private
+IPs, or personal home identifiers. Operational Orca/catalog query failures
+on default or `--all` scopes emit structured JSON/TOON (`status: error` or
+`degraded`) and exit `1`, while the GNOME screen-reader guard refuses
+cleanly at exit `0`.
 
 `mirror` projects Firstmate fleet state (the `fm-fleet-snapshot.sh --json`
 document: task states, in-flight work, PR links) into Orca UI cards carrying
@@ -62,8 +79,8 @@ blank, the command stops without guessing a machine home.
 ## Exit codes
 
 ```
-0  success (including idempotent no-ops and doctor diagnostics)
-1  error: unexpected failure
+0  success (including idempotent no-ops, doctor diagnostics, and screen-reader refusal)
+1  error: unexpected failure or hooks-audit operational query/catalog failure
 2  usage error: unknown flag, unknown command, bad update option
 ```
 
