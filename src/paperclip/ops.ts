@@ -201,6 +201,7 @@ function buildLedgerEntryFromMutation(
   mut: SyncPlan["mutations"][number],
   paperclipIssueId: string,
   now: string,
+  previous?: SyncLedgerEntry,
 ): SyncLedgerEntry {
   return {
     linearIdentifier: mut.linearIdentifier,
@@ -210,6 +211,11 @@ function buildLedgerEntryFromMutation(
     ...(mut.paperclipProjectId ? { paperclipProjectId: mut.paperclipProjectId } : {}),
     paperclipIssueId,
     ...(mut.fmTaskId ? { fmTaskId: mut.fmTaskId } : {}),
+    ...(previous?.worktree ? { worktree: previous.worktree } : {}),
+    ...(previous?.harness ? { harness: previous.harness } : {}),
+    ...(previous?.host ? { host: previous.host } : {}),
+    ...(previous?.surface ? { surface: previous.surface } : {}),
+    ...(previous?.branch ? { branch: previous.branch } : {}),
     ...(mut.githubPrUrl ? { githubPrUrl: mut.githubPrUrl } : {}),
     ...(mut.ciState ? { ciState: mut.ciState } : {}),
     lastPaperclipStatus: mut.targetStatus as PaperclipIssueStatus,
@@ -302,7 +308,12 @@ export async function runSyncOp(
       });
       return {
         applied: true,
-        ledgerEntry: buildLedgerEntryFromMutation(mut, created.id, now),
+        ledgerEntry: buildLedgerEntryFromMutation(
+          mut,
+          created.id,
+          now,
+          ledger.entries[mut.linearIdentifier],
+        ),
       };
     }
     if (mut.action === "update" && mut.paperclipIssueId && mut.paperclipCompanyId) {
@@ -315,7 +326,12 @@ export async function runSyncOp(
       });
       return {
         applied: true,
-        ledgerEntry: buildLedgerEntryFromMutation(mut, updated.id, now),
+        ledgerEntry: buildLedgerEntryFromMutation(
+          mut,
+          updated.id,
+          now,
+          ledger.entries[mut.linearIdentifier],
+        ),
       };
     }
     return { applied: false, ledgerEntry: undefined };
